@@ -11,19 +11,16 @@ import ros_services
 import ros_topics
 import os
 
+HOST = os.environ.get('HOST', '0.0.0.0')
 PORT = os.environ.get('PORT', 21554)
 
 # Returns the hierachy as one string from the first remaining part on.
-def nextname(hierachy, index_of_last_processed):
+def nextname(hierachy, last_processed_index):
     try:
-        output = ""
-        counter = index_of_last_processed + 1
-        while counter < len(hierachy):
-            output += hierachy[counter]
-            counter += 1
-        return output
+        result = "".join(map(str, hierachy[last_processed_index+1:]))
     except Exception as e:
         rospy.logerr("Error encountered ", e)
+    return result
 
 
 def own_rosnode_cleanup():
@@ -42,7 +39,7 @@ class ROSServer:
         self.actionsDict = {}
         rospy.init_node("rosopcua")
         self.server = Server()
-        self.server.set_endpoint("opc.tcp://0.0.0.0:{}/".format(PORT))
+        self.server.set_endpoint(f"opc.tcp://{HOST}:{PORT}/")
         self.server.set_server_name("ROS ua Server")
         self.server.start()
         # setup our own namespaces, this is expected
