@@ -32,10 +32,6 @@ def own_rosnode_cleanup():
 
 
 class ROSServer:
-    def __init__(self):
-        pass
-
-
     def initROS(self):
         # ROS connection
         self.namespace_ros = rospy.get_param("/rosopcua/namespace") # defined in config/params.yaml, included by the .launch script
@@ -47,37 +43,45 @@ class ROSServer:
     def initOPCUA(self):
         # OPC-UA server
         self.server = opcua.Server()
-        self.server.set_endpoint(f"opc.tcp://{HOST}:{PORT}/")
+        endpoint = f"opc.tcp://{HOST}:{PORT}/"
+        self.server.set_endpoint(endpoint)
         self.server.set_server_name("ROS ua Server")
         self.server.start()
+        print(f'OPC-UA server listening on {endpoint}')
+        
         # setup our own namespaces, this is expected
-        uri_topics = "http://ros.org/topics"
+        self.uri_topics = "http://ros.org/topics"
         # two different namespaces to make getting the correct node easier for get_node (otherwise had object for service and topic with same name
-        uri_services = "http://ros.org/services"
-        uri_actions = "http://ros.org/actions"
-        idx_topics = self.server.register_namespace(uri_topics)
-        idx_services = self.server.register_namespace(uri_services)
-        idx_actions = self.server.register_namespace(uri_actions)
+        self.uri_services = "http://ros.org/services"
+        self.uri_actions = "http://ros.org/actions"
+
+        self.idx_topics = self.server.register_namespace(self.uri_topics)
+        self.idx_services = self.server.register_namespace(self.uri_services)
+        self.idx_actions = self.server.register_namespace(self.uri_actions)
         # get Objects node, this is where we should put our custom stuff
-        objects = self.server.get_objects_node()
+        objectsNode = self.server.get_objects_node()
         # one object per type we are watching
-        topics_object = objects.add_object(idx_topics, "ROS-Topics")
-        services_object = objects.add_object(idx_services, "ROS-Services")
-        actions_object = objects.add_object(idx_actions, "ROS_Actions")
+        self.topics_object = objectsNode.add_object(self.idx_topics, "ROS-Topics")
+        self.services_object = objectsNode.add_object(self.idx_services, "ROS-Services")
+        self.actions_object = objectsNode.add_object(self.idx_actions, "ROS-Actions")
 
     # Main loop
     def loop(self):
-        while not rospy.is_shutdown():
-            # ros_topics starts a lot of publisher/subscribers, might slow everything down quite a bit.
-            ros_services.refresh_services(self.namespace_ros, self, self.servicesDict, idx_services, services_object)
-            ros_topics.refresh_topics_and_actions(self.namespace_ros, self, self.topicsDict, self.actionsDict,
-                                                  idx_topics, idx_actions, topics_object, actions_object)
-            # Don't clog cpu
-            time.sleep(60)
+        try:
+            while not rospy.is_shutdown():
+                # ros_topics starts a lot of publisher/subscribers, might slow everything down quite a bit.
+                ros_services.refresh_services(self.namespace_ros, self, self.servicesDict, self.idx_services, self.services_object)
+                ros_topics.refresh_topics_and_actions(self.namespace_ros, self, self.topicsDict, self.actionsDict,
+                                                    self.idx_topics, self.idx_actions, self.topics_object, self.actions_object)
+                # Don't clog cpu
+                time.sleep(0.5)
+        except KeyboardInterrupt:
+            pass
         self.cleanup()
 
-    def cleanup(self):
+    def cleanup(self, reason="Clean exit"):
         self.server.stop()
+        rospy.signal_shutdown(reason)
 
     def find_service_node_with_same_name(self, name, idx):
         rospy.logdebug("Reached ServiceCheck for name " + name)
