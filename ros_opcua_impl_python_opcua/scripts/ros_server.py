@@ -5,7 +5,7 @@ import time
 import rosgraph
 import rosnode
 import rospy
-from opcua import Server, ua
+import opcua
 
 import ros_services
 import ros_topics
@@ -33,12 +33,20 @@ def own_rosnode_cleanup():
 
 class ROSServer:
     def __init__(self):
-        self.namespace_ros = rospy.get_param("/rosopcua/namespace")
+        pass
+
+
+    def initROS(self):
+        # ROS connection
+        self.namespace_ros = rospy.get_param("/rosopcua/namespace") # defined in config/params.yaml, included by the .launch script
         self.topicsDict = {}
         self.servicesDict = {}
         self.actionsDict = {}
         rospy.init_node("rosopcua")
-        self.server = Server()
+
+    def initOPCUA(self):
+        # OPC-UA server
+        self.server = opcua.Server()
         self.server.set_endpoint(f"opc.tcp://{HOST}:{PORT}/")
         self.server.set_server_name("ROS ua Server")
         self.server.start()
@@ -56,6 +64,9 @@ class ROSServer:
         topics_object = objects.add_object(idx_topics, "ROS-Topics")
         services_object = objects.add_object(idx_services, "ROS-Services")
         actions_object = objects.add_object(idx_actions, "ROS_Actions")
+
+    # Main loop
+    def loop(self):
         while not rospy.is_shutdown():
             # ros_topics starts a lot of publisher/subscribers, might slow everything down quite a bit.
             ros_services.refresh_services(self.namespace_ros, self, self.servicesDict, idx_services, services_object)
@@ -63,8 +74,10 @@ class ROSServer:
                                                   idx_topics, idx_actions, topics_object, actions_object)
             # Don't clog cpu
             time.sleep(60)
+        self.cleanup()
+
+    def cleanup(self):
         self.server.stop()
-        quit()
 
     def find_service_node_with_same_name(self, name, idx):
         rospy.logdebug("Reached ServiceCheck for name " + name)
@@ -95,7 +108,10 @@ class ROSServer:
 
 
 def main(args):
-    rosserver = ROSServer()
+    server = ROSServer()
+    server.initROS()
+    server.initOPCUA()
+    server.loop()
 
 
 if __name__ == "__main__":
