@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 import sys
 import time
 
@@ -9,7 +9,9 @@ from opcua import Server, ua
 
 import ros_services
 import ros_topics
+import os
 
+PORT = os.environ.get('PORT', 21554)
 
 # Returns the hierachy as one string from the first remaining part on.
 def nextname(hierachy, index_of_last_processed):
@@ -40,7 +42,7 @@ class ROSServer:
         self.actionsDict = {}
         rospy.init_node("rosopcua")
         self.server = Server()
-        self.server.set_endpoint("opc.tcp://0.0.0.0:21554/")
+        self.server.set_endpoint("opc.tcp://0.0.0.0:{}/".format(PORT))
         self.server.set_server_name("ROS ua Server")
         self.server.start()
         # setup our own namespaces, this is expected
