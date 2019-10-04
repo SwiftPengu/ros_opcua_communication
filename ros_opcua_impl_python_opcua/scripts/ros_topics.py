@@ -9,6 +9,7 @@ import roslib
 import roslib.message
 import rospy
 from opcua import ua, uamethod
+import opcua
 
 import ros_actions
 import ros_server
@@ -270,7 +271,7 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
                                actions):
     ros_topics = rospy.get_published_topics(namespace_ros)
     rospy.logdebug(str(ros_topics))
-    rospy.logdebug(str(rospy.get_published_topics('/move_base_simple')))
+    # print(ros_topics)
     for topic_name, topic_type in ros_topics:
         if topic_name not in topicsdict or topicsdict[topic_name] is None:
             if "cancel" in topic_name or "result" in topic_name or "feedback" in topic_name or "goal" in topic_name or "status" in topic_name:
@@ -285,7 +286,8 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
                                                                                correct_name,
                                                                                get_goal_type(correct_name),
                                                                                get_feedback_type(correct_name))
-                    except (ValueError, TypeError, AttributeError) as e:
+                    # FIXME BadNodeIdExists is a bug and should be fixed, this prevents the entire server from crashing
+                    except (ValueError, TypeError, AttributeError, opcua.ua.uaerrors._auto.BadNodeIdExists) as e:
                         print(e)
                         rospy.logerr("Error while creating Action Objects for Action " + topic_name)
 

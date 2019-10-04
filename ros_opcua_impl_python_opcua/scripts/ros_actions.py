@@ -58,6 +58,7 @@ class OpcUaROSAction:
         if self.name.split("/")[-1] == self.parent.nodeid.Identifier:
             self.main_node = self.parent
         else:
+            # FIXME this crashes with duplicate names on different namespaces
             self.main_node = self.parent.add_object(
                 ua.NodeId(self.name.split("/")[-1], self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                 ua.QualifiedName(self.name.split("/")[-1], self.parent.nodeid.NamespaceIndex))
