@@ -68,6 +68,7 @@ class ROSServer:
     # Main loop
     def loop(self):
         while not rospy.is_shutdown():
+            # TODO use topic and service listeners
             # ros_topics starts a lot of publisher/subscribers, might slow everything down quite a bit.
             ros_services.refresh_services(self.namespace_ros, self, self.servicesDict, self.idx_services, self.services_object)
             ros_topics.refresh_topics_and_actions(self.namespace_ros, self, self.topicsDict, self.actionsDict,

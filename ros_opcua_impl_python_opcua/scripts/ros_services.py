@@ -180,31 +180,36 @@ def refresh_services(namespace_ros, server, servicesdict, idx, services_object_o
 
     for service_name_ros in rosservices:
         try:
+            # If we already have create the service before
             if service_name_ros not in servicesdict or servicesdict[service_name_ros] is None:
-                service = OpcUaROSService(server, services_object_opc, idx, service_name_ros,
+                serviceName = OpcUaROSService(server, services_object_opc, idx, service_name_ros,
                                           rosservice.get_service_class_by_name(service_name_ros))
-                servicesdict[service_name_ros] = service
+                assert(serviceName is not None) # Do not insert Nones into our service list
+                servicesdict[service_name_ros] = serviceName
         except (rosservice.ROSServiceException, rosservice.ROSServiceIOException) as e:
             try:
                 rospy.logerr("Error when trying to refresh services", e)
             except TypeError as e2:
                 rospy.logerr("Error when logging an Exception, can't convert everything to string")
+    # Remove services which are no longer in the list
     # use extra iteration as to not get "dict changed during iteration" errors
-    tobedeleted = []
-    rosservices = rosservice.get_service_list()
-    for service_nameOPC in servicesdict:
-        found = False
-        for rosservice_name in rosservices:
-            if service_nameOPC == rosservice_name:
-                found = True
-        if not found and servicesdict[service_nameOPC] is not None:
-            servicesdict[service_nameOPC].recursive_delete_items(
-                server.server.get_node(ua.NodeId(service_nameOPC, idx)))
-            tobedeleted.append(service_nameOPC)
-        if len(servicesdict[service_nameOPC].parent.get_children()) == 0:
-            server.server.delete_nodes([servicesdict[service_nameOPC].parent])
-    for name in tobedeleted:
-        del servicesdict[name]
+    # rosservices = rosservice.get_service_list() # TODO RH: removed double call to get_service_list, check if this break stuff
+    newServices = {newServiceName: servicesdict[newServiceName]  for newServiceName in servicesdict.keys() if newServiceName in rosservices}
+    for serviceName in servicesdict.keys(): # Check if any old services no longer exist
+        if serviceName not in newServices:
+            service = servicesdict[serviceName]
+
+            # Delete all children of pruned nodes
+            service.recursive_delete_items(
+                server.server.get_node(ua.NodeId(serviceName, idx)))
+
+            # Clean up empty parents
+            if service.parent.get_children():
+                server.server.delete_nodes([service.parent])
+    
+    # TODO move this function to ros_server, and directly assign dict
+    servicesdict.clear()
+    servicesdict.update(newServices)
 
 
 def getobjectidfromtype(type_name):
