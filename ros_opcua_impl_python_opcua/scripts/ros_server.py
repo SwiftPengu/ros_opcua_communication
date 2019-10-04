@@ -67,16 +67,13 @@ class ROSServer:
 
     # Main loop
     def loop(self):
-        try:
-            while not rospy.is_shutdown():
-                # ros_topics starts a lot of publisher/subscribers, might slow everything down quite a bit.
-                ros_services.refresh_services(self.namespace_ros, self, self.servicesDict, self.idx_services, self.services_object)
-                ros_topics.refresh_topics_and_actions(self.namespace_ros, self, self.topicsDict, self.actionsDict,
-                                                    self.idx_topics, self.idx_actions, self.topics_object, self.actions_object)
-                # Don't clog cpu
-                time.sleep(0.5)
-        except KeyboardInterrupt:
-            pass
+        while not rospy.is_shutdown():
+            # ros_topics starts a lot of publisher/subscribers, might slow everything down quite a bit.
+            ros_services.refresh_services(self.namespace_ros, self, self.servicesDict, self.idx_services, self.services_object)
+            ros_topics.refresh_topics_and_actions(self.namespace_ros, self, self.topicsDict, self.actionsDict,
+                                                self.idx_topics, self.idx_actions, self.topics_object, self.actions_object)
+            # Don't clog cpu
+            time.sleep(0.5)
         self.cleanup()
 
     def cleanup(self, reason="Clean exit"):
