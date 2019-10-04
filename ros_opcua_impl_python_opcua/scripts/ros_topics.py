@@ -259,20 +259,19 @@ def _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array
 
 # Used to delete obsolete topics
 def numberofsubscribers(nametolookfor, topicsDict):
-    # rosout only has one subscriber/publisher at all times, so ignore.
-    if nametolookfor != "/rosout":
-        ret = topicsDict[nametolookfor]._subscriber.get_num_connections()
-    else:
-        ret = 2
-    return ret
+    if nametolookfor == "/rosout":
+        return 2 # rosout only has one subscriber/publisher at all times
+    return topicsDict[nametolookfor]._subscriber.get_num_connections()
 
 
 def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, idx_topics, idx_actions, topics,
                                actions):
+    needCleanup = False
     ros_topics = rospy.get_published_topics(namespace_ros)
     rospy.logdebug(str(ros_topics))
     # print(ros_topics)
     for topic_name, topic_type in ros_topics:
+        # Create new topics if they are not in the current dict
         if topic_name not in topicsdict or topicsdict[topic_name] is None:
             if "cancel" in topic_name or "result" in topic_name or "feedback" in topic_name or "goal" in topic_name or "status" in topic_name:
                 rospy.logdebug("Found an action: " + str(topic_name))
@@ -280,12 +279,14 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
                 if correct_name not in actionsdict:
                     try:
                         rospy.loginfo("Creating Action with name: " + correct_name)
-                        actionsdict[correct_name] = ros_actions.OpcUaROSAction(server,
-                                                                               actions,
-                                                                               idx_actions,
-                                                                               correct_name,
-                                                                               get_goal_type(correct_name),
-                                                                               get_feedback_type(correct_name))
+                        action = ros_actions.OpcUaROSAction(server,
+                                actions,
+                                idx_actions,
+                                correct_name,
+                                get_goal_type(correct_name),
+                                get_feedback_type(correct_name))
+                        assert(action is not None)
+                        actionsdict[correct_name] = action
                     # FIXME BadNodeIdExists is a bug and should be fixed, this prevents the entire server from crashing
                     except (ValueError, TypeError, AttributeError, opcua.ua.uaerrors._auto.BadNodeIdExists) as e:
                         print(e)
@@ -294,13 +295,15 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
             else:
                 # rospy.loginfo("Ignoring normal topics for debugging...")
                 topic = OpcUaROSTopic(server, topics, idx_topics, topic_name, topic_type)
+                assert(topic is not None)
                 topicsdict[topic_name] = topic
+        # if the topic was already seen, check if the topic has become ?? obsolete ??
         elif numberofsubscribers(topic_name, topicsdict) <= 1 and "rosout" not in topic_name:
             topicsdict[topic_name].recursive_delete_items(server.server.get_node(ua.NodeId(topic_name, idx_topics)))
             del topicsdict[topic_name]
-            ros_server.own_rosnode_cleanup()
+            needCleanup = True
 
-    ros_topics = rospy.get_published_topics(namespace_ros)
+    # ros_topics = rospy.get_published_topics(namespace_ros)
     # use to not get dict changed during iteration errors
     tobedeleted = []
     for topic_nameOPC in topicsdict:
@@ -314,6 +317,9 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
     for name in tobedeleted:
         del topicsdict[name]
     ros_actions.refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions)
+
+    if needCleanup:
+        ros_server.own_rosnode_cleanup()
 
 
 def get_feedback_type(action_name):
