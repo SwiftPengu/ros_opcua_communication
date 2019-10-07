@@ -18,6 +18,8 @@ import ros_topics
 # DEBUG
 import sys
 
+import os.path as path
+
 class OpcUaROSAction:
     def __init__(self, server, parent, idx, name, action_type, feedback_type):
         self.server = server
@@ -344,24 +346,11 @@ class OpcUaROSAction:
         rospy.logdebug("updated feedback cb reached")
         self.message_callback(feedback)
 
-
+# Get topic name from full action_name
 def get_correct_name(topic_name):
     rospy.logdebug("getting correct name for: " + str(topic_name))
-    splits = topic_name.split("/")
-    counter = 0
-    counter2 = 0
-    result = ""
-    while counter < len(splits):
-        if splits[-1] == splits[counter] and not counter == 1:
-            while counter2 <= counter - 1:
-                if counter2 != counter - 1:
-                    result += splits[counter2] + '/'
-                else:
-                    result += splits[counter2]
-                counter2 += 1
-            return result
-        counter += 1
-    return topic_name # disable function
+    # rospy.loginfo('Topic name {}; corrected name: {}'.format(topic_name, result))
+    return path.dirname(topic_name)
 
 
 def getargarray(goal_class):
