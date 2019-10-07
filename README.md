@@ -1,25 +1,14 @@
-# ros_opcua_communication
+# Introduction
+TNO internal fork of https://github.com/iirob/ros_opcua_communication.git
 
-Clone the repository with:
+# Docker image
+## General
+The docker image hosts the server using Python 2.
 
-```
-git clone --recursive https://github.com/iirob/ros_opcua_communication.git
-```
+* To configure, set the `ROS_MASTER_URI` ENV variable inside the container to the appropriate `roscore` instance.
+* By default, the OPC-UA server will be listening on the `opc.tcp://0.0.0.0:21554/` endpoint.
 
-
-## Getting started
-
-Please check readme files of the packages:
-
-* [ros_opcua_impl_freeopcua](ros_opcua_impl_freeopcua/README.md)
-* [ros_opcua_impl_python_opcua](ros_opcua_impl_python_opcua/README.md)
-
-
-## ROS Distro Support
-
-|         | Indigo | Kinetic |
-|:-------:|:------:|:-------:|
-| Branch  | [`indigo-devel`](https://github.com/iirob/ros_opcua_communication/tree/indigo-devel) | [`kinetic_devel`](https://github.com/iirob/ros_opcua_communication/tree/kinetic-devel) |
-| Status  | [![Build Status](https://travis-ci.org/iirob/ros_opcua_communication.svg?branch=indigo-devel)](https://travis-ci.org/iirob/ros_opcua_communication) | [![Build Status](https://travis-ci.org/iirob/ros_opcua_communication.svg?branch=kinetic-devel)](https://travis-ci.org/iirob/ros_opcua_communication) |
-| Version | [version](http://repositories.ros.org/status_page/ros_indigo_default.html?q=ros_opcua_communication) | [version](http://repositories.ros.org/status_page/ros_kinetic_default.html?q=ros_opcua_communication) |
-
+## ENV vars:
+* PORT, the port to listen for OPC-UA connections (defaults to `21554`).
+* HOST, the hostname/interface to bind to (defaults to all interfaces or `0.0.0.0`).
+* NS, the ROS namespace to subscribe to (defaults to `/`).
