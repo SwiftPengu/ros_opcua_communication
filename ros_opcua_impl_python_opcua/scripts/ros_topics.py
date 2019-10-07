@@ -278,7 +278,7 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
                 correct_name = ros_actions.get_correct_name(topic_name)
                 if correct_name not in actionsdict:
                     try:
-                        rospy.loginfo("Creating Action with name: " + correct_name)
+                        rospy.loginfo("Creating Action with name: {}".format(correct_name))
                         action = ros_actions.OpcUaROSAction(server,
                                 actions,
                                 idx_actions,
@@ -324,25 +324,25 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
 
 def get_feedback_type(action_name):
     try:
-        type, name, fn = rostopic.get_topic_type(action_name + "/feedback")
+        type, name, fn = rostopic.get_topic_type("{}/feedback".format(action_name))
         return type
     except rospy.ROSException as e:
         try:
-            type, name, fn = rostopic.get_topic_type(action_name + "/Feedback", e)
+            type, name, fn = rostopic.get_topic_type("{action_name}/Feedback", e)
             return type
         except rospy.ROSException as e2:
-            rospy.logerr("Couldnt find feedback type for action " + action_name, e2)
+            rospy.logerr("Couldnt find feedback type for action {}".format(action_name), e2)
             return None
 
 
 def get_goal_type(action_name):
     try:
-        type, name, fn = rostopic.get_topic_type(action_name + "/goal")
+        type, name, fn = rostopic.get_topic_type("{}/goal".format(action_name))
         return type
     except rospy.ROSException as e:
         try:
-            type, name, fn = rostopic.get_topic_type(action_name + "/Goal", e)
+            type, name, fn = rostopic.get_topic_type("{}/Goal".format(action_name), e)
             return type
         except rospy.ROSException as e2:
-            rospy.logerr("Couldnt find feedback type for action " + action_name, e2)
+            rospy.logerr("Couldnt find feedback type for action {}".format(action_name), e2)
             return None

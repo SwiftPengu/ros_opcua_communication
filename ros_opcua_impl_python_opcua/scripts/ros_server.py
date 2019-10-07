@@ -43,11 +43,11 @@ class ROSServer:
     def initOPCUA(self):
         # OPC-UA server
         self.server = opcua.Server()
-        endpoint = f"opc.tcp://{HOST}:{PORT}/"
+        endpoint = "opc.tcp://{}:{}/".format(HOST,PORT)
         self.server.set_endpoint(endpoint)
         self.server.set_server_name("ROS ua Server")
         self.server.start()
-        print(f'OPC-UA server listening on {endpoint}')
+        print('OPC-UA server listening on {}'.format(endpoint))
         
         # setup our own namespaces, this is expected
         self.uri_topics = "http://ros.org/topics"
