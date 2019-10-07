@@ -13,6 +13,7 @@ import os
 
 HOST = os.environ.get('HOST', '0.0.0.0')
 PORT = os.environ.get('PORT', 21554)
+NS = os.environ.get('NS', '/') # alternative for using the params.yaml file
 
 # Returns the hierachy as one string from the first remaining part on.
 def nextname(hierachy, last_processed_index):
@@ -34,7 +35,7 @@ def own_rosnode_cleanup():
 class ROSServer:
     def initROS(self):
         # ROS connection
-        self.namespace_ros = rospy.get_param("/rosopcua/namespace") # defined in config/params.yaml, included by the .launch script
+        self.namespace_ros = NS
         self.topicsDict = {}
         self.servicesDict = {}
         self.actionsDict = {}
