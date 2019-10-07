@@ -15,6 +15,8 @@ import ros_server
 import ros_services
 import ros_topics
 
+# DEBUG
+import sys
 
 class OpcUaROSAction:
     def __init__(self, server, parent, idx, name, action_type, feedback_type):
@@ -359,6 +361,7 @@ def get_correct_name(topic_name):
                 counter2 += 1
             return result
         counter += 1
+    return topic_name # disable function
 
 
 def getargarray(goal_class):
@@ -370,23 +373,20 @@ def getargarray(goal_class):
                 array_to_merge = getargarray(slot)
                 array.extend(array_to_merge)
             else:
+                arg = ua.Argument()
+                arg.ValueRank = -1
+                arg.ArrayDimensions = [] # FIXME differs from ros_services.py is this a bug?
                 if isinstance(slot, list):
                     rospy.logdebug("Found an Array Argument!")
-                    arg = ua.Argument()
                     arg.Name = slot_name
                     arg.DataType = ua.NodeId(ros_services.getobjectidfromtype("array"))
-                    arg.ValueRank = -1
-                    arg.ArrayDimensions = []
                     arg.Description = ua.LocalizedText("Array")
                 else:
-                    arg = ua.Argument()
                     if hasattr(goal_class, "__name__"):
                         arg.Name = goal_class.__name__ + slot_name
                     else:
                         arg.Name = slot_name
                     arg.DataType = ua.NodeId(ros_services.getobjectidfromtype(type(slot).__name__))
-                    arg.ValueRank = -1
-                    arg.ArrayDimensions = []
                     arg.Description = ua.LocalizedText(slot_name)
                 array.append(arg)
 

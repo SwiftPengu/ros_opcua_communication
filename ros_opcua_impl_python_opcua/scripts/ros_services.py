@@ -9,6 +9,7 @@ import time
 import genpy
 import rospy
 import rosservice
+import string
 from opcua import ua, uamethod, common
 
 import ros_server
@@ -156,18 +157,15 @@ def getargarray(sample_req):
             array_to_merge = getargarray(slot)
             array.extend(array_to_merge)
         else:
+            arg = ua.Argument()
+            arg.Name = slot_name
+            arg.ValueRank = -1
             if isinstance(slot, list):
-                arg = ua.Argument()
-                arg.Name = slot_name
                 arg.DataType = ua.NodeId(getobjectidfromtype("array"))
-                arg.ValueRank = -1
                 arg.ArrayDimensions = [1]
                 arg.Description = ua.LocalizedText("Array")
             else:
-                arg = ua.Argument()
-                arg.Name = slot_name
                 arg.DataType = ua.NodeId(getobjectidfromtype(type(slot).__name__))
-                arg.ValueRank = -1
                 arg.ArrayDimensions = []
                 arg.Description = ua.LocalizedText(slot_name)
             array.append(arg)
@@ -188,7 +186,7 @@ def refresh_services(namespace_ros, server, servicesdict, idx, services_object_o
                 servicesdict[service_name_ros] = serviceName
         except (rosservice.ROSServiceException, rosservice.ROSServiceIOException) as e:
             try:
-                rospy.logerr("Error when trying to refresh services", e)
+                rospy.logerr("Error when trying to refresh services, " + str(e))
             except TypeError as e2:
                 rospy.logerr("Error when logging an Exception, can't convert everything to string")
     # Remove services which are no longer in the list
@@ -213,6 +211,7 @@ def refresh_services(namespace_ros, server, servicesdict, idx, services_object_o
 
 
 def getobjectidfromtype(type_name):
+    lc_type_name = string.lower(type_name)
     if type_name == 'bool':
         dv = ua.ObjectIds.Boolean
     elif type_name == 'byte':
@@ -244,8 +243,10 @@ def getobjectidfromtype(type_name):
         dv = ua.ObjectIds.String
     elif type_name == 'array':
         dv = ua.ObjectIds.Enumeration
-    elif type_name == 'Time' or type_name == 'time':
+    elif lc_type_name == 'time':
         dv = ua.ObjectIds.Time
+    elif lc_type_name == 'duration':
+        dv = ua.ObjectIds.UInt32 # We probably need a custom type for this, the built-in duration is msecs, ROS uses nsecs
     else:
         rospy.logerr("Can't create type with name " + type_name)
         return None

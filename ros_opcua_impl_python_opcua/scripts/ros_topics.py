@@ -15,6 +15,11 @@ import ros_actions
 import ros_server
 import rostopic
 
+import traceback
+
+
+#debug
+import sys
 
 class OpcUaROSTopic:
     def __init__(self, server, parent, idx, topic_name, topic_type):
@@ -30,15 +35,17 @@ class OpcUaROSTopic:
             self.message_class = roslib.message.get_message_class(topic_type)
             self.message_instance = self.message_class()
 
-        except rospy.ROSException:
+            self._recursive_create_items(self.parent, idx, topic_name, topic_type, self.message_instance, True)
+
+            self._subscriber = rospy.Subscriber(self.name, self.message_class, self.message_callback)
+            self._publisher = rospy.Publisher(self.name, self.message_class, queue_size=1)
+            rospy.loginfo("Created ROS Topic with name: " + str(self.name))
+        except (rospy.ROSException, TypeError) as e:
             self.message_class = None
             rospy.logfatal("Couldn't find message class for type " + topic_type)
 
-        self._recursive_create_items(self.parent, idx, topic_name, topic_type, self.message_instance, True)
+            raise e
 
-        self._subscriber = rospy.Subscriber(self.name, self.message_class, self.message_callback)
-        self._publisher = rospy.Publisher(self.name, self.message_class, queue_size=1)
-        rospy.loginfo("Created ROS Topic with name: " + str(self.name))
 
     def _recursive_create_items(self, parent, idx, topic_name, type_name, message, top_level=False):
         topic_text = topic_name.split('/')[-1]
@@ -269,7 +276,6 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
     needCleanup = False
     ros_topics = rospy.get_published_topics(namespace_ros)
     rospy.logdebug(str(ros_topics))
-    # print(ros_topics)
     for topic_name, topic_type in ros_topics:
         # Create new topics if they are not in the current dict
         if topic_name not in topicsdict or topicsdict[topic_name] is None:
@@ -278,22 +284,26 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
                 correct_name = ros_actions.get_correct_name(topic_name)
                 if correct_name not in actionsdict:
                     try:
-                        rospy.loginfo("Creating Action with name: {}".format(correct_name))
-                        action = ros_actions.OpcUaROSAction(server,
-                                actions,
-                                idx_actions,
-                                correct_name,
-                                get_goal_type(correct_name),
-                                get_feedback_type(correct_name))
-                        assert(action is not None)
-                        actionsdict[correct_name] = action
+                        goal_type = get_goal_type(correct_name)
+                        if goal_type is not None: # do not register if the topic does not have a goal
+                            rospy.loginfo("Creating Action with name: {}".format(correct_name))
+                            action = ros_actions.OpcUaROSAction(server,
+                                    actions,
+                                    idx_actions,
+                                    correct_name,
+                                    goal_type,
+                                    get_feedback_type(correct_name))
+                            assert(action is not None)
+                            actionsdict[correct_name] = action
                     # FIXME BadNodeIdExists is a bug and should be fixed, this prevents the entire server from crashing
                     except (ValueError, TypeError, AttributeError, opcua.ua.uaerrors._auto.BadNodeIdExists) as e:
                         print(e)
+                        traceback.print_exc()
                         rospy.logerr("Error while creating Action Objects for Action " + topic_name)
 
             else:
                 # rospy.loginfo("Ignoring normal topics for debugging...")
+                # FIXME crashes when message type is not known
                 topic = OpcUaROSTopic(server, topics, idx_topics, topic_name, topic_type)
                 assert(topic is not None)
                 topicsdict[topic_name] = topic
