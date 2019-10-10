@@ -78,8 +78,17 @@ class OpcUaROSTopic:
             except (ValueError, TypeError):
                 base_instance = None
 
+            if '/tf' in topic_name:
+                rospy.loginfo('RCC [{}] {}'.format(topic_name, type_name))
+                rospy.loginfo('RCC [{}] {} {}'.format(topic_name, base_type_str, array_size))
+
             if array_size is not None and hasattr(base_instance, '__slots__'):
+                if '/tf' in topic_name:
+                    rospy.loginfo('RCC [{}] Creating recursively'.format(topic_name))
+                # FIXME bug is here, no nodes are created for unbounded arrays
                 for index in range(array_size):
+                    if '/tf' in topic_name:
+                        rospy.loginfo('RCC [{}] Creating recursively {}'.format(topic_name, index))
                     self._recursive_create_items(parent, idx, topic_name + '[%d]' % index, base_type_str, base_instance)
             else:
                 new_node = _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array_size)
@@ -90,7 +99,9 @@ class OpcUaROSTopic:
         return
 
     def message_callback(self, message):
+        # rospy.loginfo('--- message cb | {}'.format(self.name))
         self.update_value(self.name, message)
+        sys.stdout.flush()
 
     # Method to force request a value update towards ROS
     @uamethod
@@ -113,36 +124,56 @@ class OpcUaROSTopic:
 
     # Method which publishes ROS topic updates to OPC-UA
     def update_value(self, topic_name, message):
-        # Structs
-        if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
-            for slot_name in message.__slots__:
-                self.update_value('{}/{}'.format(topic_name,slot_name), getattr(message, slot_name))
+        if '/tf' in topic_name:
+            # Structs
+            if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
+                # rospy.loginfo('updating slots of topic {}'.format(topic_name))
+                for slot_name in message.__slots__:
+                    # rospy.loginfo('updating slot of topic {}: {}'.format(topic_name, slot_name))
+                    self.update_value('{}/{}'.format(topic_name,slot_name), getattr(message, slot_name))
 
-        # Lists, currently missing from the server
-        elif type(message) in (list, tuple):
-            # Some messages have slots, others don't
-            if (len(message) > 0) and hasattr(message[0], '__slots__'):
-                for index, slot in enumerate(message):
-                    if topic_name + '[%d]' % index in self._nodes:
-                        self.update_value(topic_name + '[%d]' % index, slot)
-                    else:
-                        if topic_name in self._nodes:
-                            base_type_str, _ = _extract_array_info(
-                                self._nodes[topic_name].text(self.type_name))
-                            self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index,
-                                                         base_type_str,
-                                                         slot, None)
-            # remove obsolete children
-            if topic_name in self._nodes:
-                if len(message) < len(self._nodes[topic_name].get_children()):
-                    for i in range(len(message), self._nodes[topic_name].childCount()):
-                        item_topic_name = topic_name + '[%d]' % i
-                        self.recursive_delete_items(self._nodes[item_topic_name])
-                        del self._nodes[item_topic_name]
-        else:
-            # Not missing
-            if topic_name in self._nodes and self._nodes[topic_name] is not None:
-                self._nodes[topic_name].set_value(repr(message))
+            # Lists, currently missing from the server
+            elif type(message) in (list, tuple):
+                # Some messages have slots, others don't
+                # rospy.loginfo('[{}] Message is a list or tuple, len: {}'.format(topic_name, len(message)))
+                #if (len(message) > 0) and hasattr(message[0], '__slots__'):
+                if (len(message) > 0):
+                    # rospy.loginfo('[{}] Processing array, len: {}'.format(topic_name, len(message)))
+                    for index, slot in enumerate(message):
+                        if '{}[{}]'.format(topic_name, index) in self._nodes:
+                            self.update_value(topic_name + '[%d]' % index, slot)
+                        else:
+                            # rospy.loginfo('[{}[{}]] Topic not in self.nodes'.format(topic_name, index))
+                            if topic_name in self._nodes:
+                                # rospy.loginfo('[{}] Topic in self.nodes'.format(topic_name))
+                                base_type_str, _ = _extract_array_info(
+                                    self._nodes[topic_name].text(self.type_name))
+                                self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index,
+                                                            base_type_str,
+                                                            slot, None)
+                            else:
+                                # FIXME unbounded arrays have no nodes, so new ones are needed
+                                pass # not handled!
+                                # rospy.loginfo('[{}] skipped'.format(topic_name))
+                                # rospy.loginfo(self._nodes)
+                else:
+                    rospy.loginfo('[{}] Message skipped, len: {}'.format(topic_name, len(message)))
+                    # rospy.loginfo('Message: {}'.format(str(message)))
+
+                # remove obsolete children
+                if topic_name in self._nodes:
+                    if len(message) < len(self._nodes[topic_name].get_children()):
+                        for i in range(len(message), self._nodes[topic_name].childCount()):
+                            item_topic_name = topic_name + '[%d]' % i
+                            self.recursive_delete_items(self._nodes[item_topic_name])
+                            del self._nodes[item_topic_name]
+            else:
+                # Not missing
+                rospy.loginfo('Message set to repr {}, repr: {}'.format(topic_name, repr(message)))
+                if topic_name in self._nodes and self._nodes[topic_name] is not None:
+                    self._nodes[topic_name].set_value(repr(message))
+                else:
+                    rospy.loginfo('Message skipped (2) {}, len: {}'.format(topic_name, len(message)))
 
     def recursive_delete_items(self, item):
         self._publisher.unregister()
@@ -156,6 +187,7 @@ class OpcUaROSTopic:
         if len(self.parent.get_children()) == 0:
             self.server.server.delete_nodes([self.parent])
 
+    # Converts the value of the node to that specified in the ros message we are trying to fill.
     def create_message_instance(self, node):
         for child in node.get_children():
             name = child.get_display_name().Text
@@ -165,7 +197,7 @@ class OpcUaROSTopic:
                             correct_type(child, type(getattr(self.message_instance, name))))
                 elif child.get_node_class == ua.NodeClass.Object:
                     setattr(self.message_instance, name, self.create_message_instance(child))
-        return self.message_instance  # Converts the value of the node to that specified in the ros message we are trying to fill. Casts python ints
+        return self.message_instance
 
     def recursive_create_objects(self, topic_name, idx, parent):
         hierachy = topic_name.split('/')
@@ -186,8 +218,8 @@ class OpcUaROSTopic:
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
                         return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
                                                              newparent)
-                # thrown when node with parent name is not existent in server
-                except (IndexError, opcua.ua.uaerrors._auto.BadNodeIdExists): # opcua.common.UaError
+                # thrown when node with parent name is not existent in server or when nodeid already exists (perhaps that error should be unrecoverable)
+                except (IndexError, opcua.ua.uaerrors._auto.BadNodeIdExists):
                     newparent = parent.add_object(
                         ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
                                   ua.NodeIdType.String),
@@ -264,8 +296,11 @@ def _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array
     else:
         rospy.logerr("can't create node with type" + str(type_name))
         return None
+    
+    if '/tf' in topic_name:
+        rospy.loginfo('Selected variant {}'.format(dv))
 
-    if array_size is not None:
+    if array_size is not None and array_size > 0:
         value = []
         for i in range(array_size):
             value.append(i)
@@ -319,7 +354,7 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
                 topic = OpcUaROSTopic(server, topics, idx_topics, topic_name, topic_type)
                 assert(topic is not None)
                 topicsdict[topic_name] = topic
-        # if the topic was already seen, check if the topic has become ?? obsolete ??
+        # If we are no longer subscribed to the topic, remove it ??
         elif numberofsubscribers(topic_name, topicsdict) <= 1 and "rosout" not in topic_name:
             topicsdict[topic_name].recursive_delete_items(server.server.get_node(ua.NodeId(topic_name, idx_topics)))
             del topicsdict[topic_name]
@@ -332,7 +367,6 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
         if topicName not in newTopics:
             topic = topicsdict[topicName]
 
-            # FIXME this leaves ROS to poll the opcua topic for non-existent topics, perhaps we need to delete empty nodes as well (see ros_services.py)
             # Delete all children of pruned nodes
             topic.recursive_delete_items(
                     server.server.get_node(

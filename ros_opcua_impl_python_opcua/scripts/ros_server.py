@@ -76,6 +76,7 @@ class ROSServer:
                 ros_services.refresh_services(self.namespace_ros, self, self.servicesDict, self.idx_services, self.services_object)
                 ros_topics.refresh_topics_and_actions(self.namespace_ros, self, self.topicsDict, self.actionsDict, self.idx_topics, self.idx_actions, self.topics_object, self.actions_object)
                 # Don't clog cpu
+                quit()
                 time.sleep(2)
         finally:
             # Always attempt to clean up
