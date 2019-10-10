@@ -8,7 +8,7 @@ import random
 import roslib
 import roslib.message
 import rospy
-from opcua import ua, uamethod
+from opcua import ua, uamethod, common
 import opcua
 
 import ros_actions
@@ -295,14 +295,13 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
                                     get_feedback_type(correct_name))
                             assert(action is not None)
                             actionsdict[correct_name] = action
-                    # FIXME BadNodeIdExists is a bug and should be fixed, this prevents the entire server from crashing
+                    # FIXME BadNodeIdExists is a bug and should be fixed, this prevents the entire server from crashing, see ros_actions.py
                     except (ValueError, TypeError, AttributeError, opcua.ua.uaerrors._auto.BadNodeIdExists) as e:
                         print(e)
                         traceback.print_exc()
                         rospy.logerr("Error while creating Action Objects for Action " + topic_name)
 
             else:
-                # rospy.loginfo("Ignoring normal topics for debugging...")
                 # FIXME crashes when message type is not known
                 topic = OpcUaROSTopic(server, topics, idx_topics, topic_name, topic_type)
                 assert(topic is not None)
@@ -314,18 +313,24 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
             needCleanup = True
 
     # ros_topics = rospy.get_published_topics(namespace_ros)
-    # use to not get dict changed during iteration errors
-    tobedeleted = []
-    for topic_nameOPC in topicsdict:
-        found = False
-        for topicROS, topic_type in ros_topics:
-            if topic_nameOPC == topicROS:
-                found = True
-        if not found:
-            topicsdict[topic_nameOPC].recursive_delete_items(server.get_node(ua.NodeId(topic_nameOPC, idx_topics)))
-            tobedeleted.append(topic_nameOPC)
-    for name in tobedeleted:
-        del topicsdict[name]
+    # All current topics which are also present at ROS, we have created all new topics, so only need to remove old topics.
+    newTopics = {newTopicName: topicsdict[newTopicName] for newTopicName in topicsdict.keys() if newTopicName in ros_topics}
+    for topicName in topicsdict.keys(): # Check if any old services no longer exist
+        if topicName not in newTopics:
+            topic = topicsdict[topicName]
+
+            # FIXME this leaves ROS to poll the opcua topic for non-existent topics, perhaps we need to delete empty nodes as well (see ros_services.py)
+            # Delete all children of pruned nodes
+            # topic.recursive_delete_items(
+            #         server.server.get_node(
+            #             ua.NodeId(topicName, idx_topics)
+            #         )
+            #     )
+    
+    # TODO move this function to ros_server, and directly assign dict
+    topicsdict.clear()
+    topicsdict.update(newTopics)
+
     ros_actions.refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions)
 
     if needCleanup:

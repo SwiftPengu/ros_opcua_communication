@@ -62,10 +62,11 @@ class OpcUaROSAction:
         if self.name.split("/")[-1] == self.parent.nodeid.Identifier:
             self.main_node = self.parent
         else:
-            # FIXME this crashes with duplicate names on different namespaces
-            self.main_node = self.parent.add_object(
-                ua.NodeId(self.name.split("/")[-1], self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
-                ua.QualifiedName(self.name.split("/")[-1], self.parent.nodeid.NamespaceIndex))
+            # FIXME band-aid, but no real fix, may lead to problems later
+            # FIXME without the band-aid this crashes with duplicate names on different namespaces for /panda_hand_controller/follow_joint_trajectory
+            nodeid = ua.NodeId(self.name.split("/")[-1] + str(random.randint(0,50000)), self.parent.nodeid.NamespaceIndex, ua.NodeIdType.String)
+            qn = ua.QualifiedName(self.name.split("/")[-1], self.parent.nodeid.NamespaceIndex)
+            self.main_node = self.parent.add_object(nodeid, qn)
         rospy.logdebug("Created Main Node under parent!")
         self.result = self.main_node.add_object(
             ua.NodeId(self.name + "_result", self.main_node.nodeid.NamespaceIndex, ua.NodeIdType.String),
