@@ -284,31 +284,35 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
                                actions):
     needCleanup = False
     ros_topics = rospy.get_published_topics(namespace_ros)
-    rospy.logdebug(str(ros_topics))
     for topic_name, topic_type in ros_topics:
         # Create new topics if they are not in the current dict
         if topic_name not in topicsdict or topicsdict[topic_name] is None:
             if "cancel" in topic_name or "result" in topic_name or "feedback" in topic_name or "goal" in topic_name or "status" in topic_name:
                 rospy.logdebug("Found an action: " + str(topic_name))
+                
                 correct_name = ros_actions.get_correct_name(topic_name)
-                if correct_name not in actionsdict:
-                    try:
-                        goal_type = get_goal_type(correct_name)
-                        if goal_type is not None: # do not register if the topic does not have a goal
-                            rospy.loginfo("Creating Action with name: {}".format(correct_name))
-                            action = ros_actions.OpcUaROSAction(server,
-                                    actions,
-                                    idx_actions,
-                                    correct_name,
-                                    goal_type,
-                                    get_feedback_type(correct_name))
-                            assert(action is not None)
-                            actionsdict[correct_name] = action
-                    # FIXME BadNodeIdExists is a bug and should be fixed, this prevents the entire server from crashing, see ros_actions.py
-                    except (ValueError, TypeError, AttributeError, opcua.ua.uaerrors._auto.BadNodeIdExists) as e:
-                        print(e)
-                        traceback.print_exc()
-                        rospy.logerr("Error while creating Action Objects for Action " + topic_name)
+                rospy.logdebug('Skipping generation of action {}'.format(correct_name))
+                continue # Disabled actions for debugging purposes
+                
+                # if correct_name not in actionsdict:
+                #     try:
+                #         goal_type = get_goal_type(correct_name)
+                #         if goal_type is not None: # do not register if the topic does not have a goal
+                #             rospy.loginfo("Creating Action with name: {}".format(correct_name))
+                            
+                #             action = ros_actions.OpcUaROSAction(server,
+                #                     actions,
+                #                     idx_actions,
+                #                     correct_name,
+                #                     goal_type,
+                #                     get_feedback_type(correct_name))
+                #             assert(action is not None)
+                #             actionsdict[correct_name] = action
+                #     # FIXME BadNodeIdExists is a bug and should be fixed, this prevents the entire server from crashing, see ros_actions.py
+                #     except (ValueError, TypeError, AttributeError, opcua.ua.uaerrors._auto.BadNodeIdExists) as e:
+                #         print(e)
+                #         traceback.print_exc()
+                #         rospy.logerr("Error while creating Action Objects for Action " + topic_name)
 
             else:
                 # FIXME crashes when message type is not known
