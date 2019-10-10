@@ -8,7 +8,7 @@ import random
 import roslib
 import roslib.message
 import rospy
-from opcua import ua, uamethod, common
+from opcua import ua, uamethod
 import opcua
 
 import ros_actions
@@ -59,6 +59,8 @@ class OpcUaROSTopic:
                                          ua.QualifiedName(topic_name, parent.nodeid.NamespaceIndex))
             new_node.add_property(ua.NodeId(topic_name + ".Type", idx),
                                   ua.QualifiedName("Type", parent.nodeid.NamespaceIndex), type_name)
+
+            # Add an 'update' method, which ??? (publish to ROS) ?
             if top_level:
                 new_node.add_method(ua.NodeId(topic_name + ".Update", parent.nodeid.NamespaceIndex),
                                     ua.QualifiedName("Update", parent.nodeid.NamespaceIndex),
@@ -69,7 +71,7 @@ class OpcUaROSTopic:
             self._nodes[topic_name] = new_node
 
         else:
-            # This are arrays
+            # These are arrays
             base_type_str, array_size = _extract_array_info(type_name)
             try:
                 base_instance = roslib.message.get_message_class(base_type_str)()
@@ -90,29 +92,35 @@ class OpcUaROSTopic:
     def message_callback(self, message):
         self.update_value(self.name, message)
 
+    # Method to force request a value update towards ROS
     @uamethod
     def opcua_update_callback(self, parent):
         try:
             for nodeName in self._nodes:
-                child = self._nodes[nodeName]
-                name = child.get_display_name().Text
-                if hasattr(self.message_instance, name):
+                child = self._nodes[nodeName] # look up value for the key
+                childName = child.get_display_name().Text # get child name
+                if hasattr(self.message_instance, childName):
                     if child.get_node_class() == ua.NodeClass.Variable:
-                        setattr(self.message_instance, name,
-                                correct_type(child, type(getattr(self.message_instance, name))))
+                        setattr(self.message_instance, childName,
+                                correct_type(child, type(getattr(self.message_instance, childName))))
                     elif child.get_node_class == ua.NodeClass.Object:
-                        setattr(self.message_instance, name, self.create_message_instance(child))
+                        setattr(self.message_instance, childName, self.create_message_instance(child))
+            # Publish OPC-UA data to ROS ??
             self._publisher.publish(self.message_instance)
         except rospy.ROSException as e:
             rospy.logerr("Error when updating node " + self.name, e)
-            self.server.server.delete_nodes([self.parent])
+            self.server.server.delete_nodes([self.parent]) # FIXME this may cause even more problems?
 
+    # Method which publishes ROS topic updates to OPC-UA
     def update_value(self, topic_name, message):
+        # Structs
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
             for slot_name in message.__slots__:
-                self.update_value(topic_name + '/' + slot_name, getattr(message, slot_name))
+                self.update_value('{}/{}'.format(topic_name,slot_name), getattr(message, slot_name))
 
+        # Lists, currently missing from the server
         elif type(message) in (list, tuple):
+            # Some messages have slots, others don't
             if (len(message) > 0) and hasattr(message[0], '__slots__'):
                 for index, slot in enumerate(message):
                     if topic_name + '[%d]' % index in self._nodes:
@@ -132,6 +140,7 @@ class OpcUaROSTopic:
                         self.recursive_delete_items(self._nodes[item_topic_name])
                         del self._nodes[item_topic_name]
         else:
+            # Not missing
             if topic_name in self._nodes and self._nodes[topic_name] is not None:
                 self._nodes[topic_name].set_value(repr(message))
 
@@ -163,7 +172,7 @@ class OpcUaROSTopic:
         if len(hierachy) == 0 or len(hierachy) == 1:
             return parent
         for name in hierachy:
-            if name != '':
+            if name != '': # skip empty names (e.g. the first slash)
                 try:
                     nodewithsamename = self.server.find_topics_node_with_same_name(name, idx)
                     if nodewithsamename is not None:
@@ -178,7 +187,7 @@ class OpcUaROSTopic:
                         return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
                                                              newparent)
                 # thrown when node with parent name is not existent in server
-                except (IndexError, common.UaError):
+                except (IndexError, opcua.ua.uaerrors._auto.BadNodeIdExists): # opcua.common.UaError
                     newparent = parent.add_object(
                         ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
                                   ua.NodeIdType.String),
@@ -314,26 +323,27 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
 
     # ros_topics = rospy.get_published_topics(namespace_ros)
     # All current topics which are also present at ROS, we have created all new topics, so only need to remove old topics.
-    newTopics = {newTopicName: topicsdict[newTopicName] for newTopicName in topicsdict.keys() if newTopicName in ros_topics}
+    newTopics = {newTopicName: topicsdict[newTopicName] for newTopicName in topicsdict.keys() if newTopicName in [topic_name for topic_name, _ in ros_topics]}
     for topicName in topicsdict.keys(): # Check if any old services no longer exist
         if topicName not in newTopics:
             topic = topicsdict[topicName]
 
             # FIXME this leaves ROS to poll the opcua topic for non-existent topics, perhaps we need to delete empty nodes as well (see ros_services.py)
             # Delete all children of pruned nodes
-            # topic.recursive_delete_items(
-            #         server.server.get_node(
-            #             ua.NodeId(topicName, idx_topics)
-            #         )
-            #     )
+            topic.recursive_delete_items(
+                    server.server.get_node(
+                        ua.NodeId(topicName, idx_topics)
+                    )
+                )
     
     # TODO move this function to ros_server, and directly assign dict
-    topicsdict.clear()
+    # topicsdict.clear()
     topicsdict.update(newTopics)
 
     ros_actions.refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions)
 
     if needCleanup:
+        rospy.loginfo('Cleaning up rosnode')
         ros_server.own_rosnode_cleanup()
 
 
