@@ -25,18 +25,18 @@ import sys
 class OpcUaROSTopic:
     def __init__(self, server, parent, idx, topic_name, topic_type):
         self.server = server
-        self.parent = self.recursive_create_objects(topic_name, idx, parent)
+        self.idx = idx
+        self.parent = self.recursive_create_objects(topic_name, parent)
         self.type_name = topic_type
         self.name = topic_name
         self._nodes = {}
-        self.idx = idx
 
         self.message_class = None
         try:
             self.message_class = roslib.message.get_message_class(topic_type)
             self.message_instance = self.message_class()
 
-            self._recursive_create_items(self.parent, idx, topic_name, topic_type, self.message_instance, True)
+            self._recursive_create_items(self.parent, topic_name, topic_type, self.message_instance, True)
 
             self._subscriber = rospy.Subscriber(self.name, self.message_class, self.message_callback)
             self._publisher = rospy.Publisher(self.name, self.message_class, queue_size=1)
@@ -48,7 +48,7 @@ class OpcUaROSTopic:
             raise e
 
 
-    def _recursive_create_items(self, parent, idx, topic_name, type_name, message, top_level=False):
+    def _recursive_create_items(self, parent, topic_name, type_name, message, top_level=False):
         topic_text = topic_name.split('/')[-1]
         if '[' in topic_text:
             topic_text = topic_text[topic_text.index('['):]
@@ -58,7 +58,7 @@ class OpcUaROSTopic:
             complex_type = True
             new_node = parent.add_object(ua.NodeId(topic_name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                                          ua.QualifiedName(topic_name, parent.nodeid.NamespaceIndex))
-            new_node.add_property(ua.NodeId(topic_name + ".Type", idx),
+            new_node.add_property(ua.NodeId(topic_name + ".Type", self.idx),
                                   ua.QualifiedName("Type", parent.nodeid.NamespaceIndex), type_name)
 
             # Add an 'update' method, which ??? (publish to ROS) ?
@@ -67,7 +67,7 @@ class OpcUaROSTopic:
                                     ua.QualifiedName("Update", parent.nodeid.NamespaceIndex),
                                     self.opcua_update_callback, [], [])
             for slot_name, type_name_child in zip(message.__slots__, message._slot_types):
-                self._recursive_create_items(new_node, idx, topic_name + '/' + slot_name, type_name_child,
+                self._recursive_create_items(new_node, topic_name + '/' + slot_name, type_name_child,
                                              getattr(message, slot_name))
             self._nodes[topic_name] = new_node
 
@@ -90,9 +90,9 @@ class OpcUaROSTopic:
                 for index in range(array_size):
                     if '/tf' in topic_name:
                         rospy.loginfo('RCC [{}] Creating recursively {}'.format(topic_name, index))
-                    self._recursive_create_items(parent, idx, topic_name + '[%d]' % index, base_type_str, base_instance)
+                    self._recursive_create_items(parent, topic_name + '[%d]' % index, base_type_str, base_instance)
             else:
-                new_node = _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array_size)
+                new_node = _create_node_with_type(parent, self.idx, topic_name, topic_text, type_name, array_size)
                 self._nodes[topic_name] = new_node
 
         if topic_name in self._nodes and self._nodes[topic_name].get_node_class() == ua.NodeClass.Variable:
@@ -165,7 +165,7 @@ class OpcUaROSTopic:
                         # rospy.loginfo('[{}] Topic in self.nodes'.format(topic_name))
                         base_type_str, _ = _extract_array_info(
                             self._nodes[topic_name].text(self.type_name))
-                        self._recursive_create_items(self._nodes[topic_name], self.idx, topic_name + '[%d]' % index,
+                        self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index,
                                                     base_type_str,
                                                     slot, None)
                     else:
@@ -208,16 +208,16 @@ class OpcUaROSTopic:
                     setattr(self.message_instance, name, self.create_message_instance(child))
         return self.message_instance
 
-    def recursive_create_objects(self, topic_name, idx, parent):
+    def recursive_create_objects(self, topic_name, parent):
         hierachy = topic_name.split('/')
         if len(hierachy) == 0 or len(hierachy) == 1:
             return parent
         for name in hierachy:
             if name != '': # skip empty names (e.g. the first slash)
                 try:
-                    nodewithsamename = self.server.find_topics_node_with_same_name(name, idx)
+                    nodewithsamename = self.server.find_topics_node_with_same_name(name, self.idx)
                     if nodewithsamename is not None:
-                        return self.recursive_create_objects(common.nextname(hierachy, hierachy.index(name)), idx,
+                        return self.recursive_create_objects(common.nextname(hierachy, hierachy.index(name)),
                                                              nodewithsamename)
                     else:
                         # if for some reason 2 services with exactly same name are created use hack>: add random int, prob to hit two
@@ -225,7 +225,7 @@ class OpcUaROSTopic:
                         newparent = parent.add_object(
                             ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                        return self.recursive_create_objects(common.nextname(hierachy, hierachy.index(name)), idx,
+                        return self.recursive_create_objects(common.nextname(hierachy, hierachy.index(name)),
                                                              newparent)
                 # thrown when node with parent name is not existent in server or when nodeid already exists (perhaps that error should be unrecoverable)
                 except (IndexError, opcua.ua.uaerrors._auto.BadNodeIdExists):
@@ -233,7 +233,7 @@ class OpcUaROSTopic:
                         ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
                                   ua.NodeIdType.String),
                         ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                    return self.recursive_create_objects(common.nextname(hierachy, hierachy.index(name)), idx,
+                    return self.recursive_create_objects(common.nextname(hierachy, hierachy.index(name)),
                                                          newparent)
 
         return parent
