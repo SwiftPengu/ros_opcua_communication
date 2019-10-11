@@ -81,7 +81,7 @@ class OpcUaROSAction:
             ua.NodeId(self.name + "_goal", self.main_node.nodeid.NamespaceIndex, ua.NodeIdType.String),
             ua.QualifiedName("goal", parent.nodeid.NamespaceIndex))
         self.goal_node = self.goal.add_method(idx, self.name + "_send_goal", self.send_goal,
-                                              getargarray(self.goal_instance), [])
+                                              OpcUaROSAction.getargarray(self.goal_instance), [])
 
         self.goal_cancel = self.goal.add_method(idx, self.name + "_cancel_goal", self.cancel_goal, [], [])
 
@@ -336,7 +336,7 @@ class OpcUaROSAction:
 
     def update_result(self, state, result):
         rospy.logdebug("updated result cb reached")
-        self.status_node.set_value(map_status_to_string(state))
+        self.status_node.set_value(OpcUaROSAction.map_status_to_string(state))
         self.result_node.set_value(repr(result))
 
     def update_state(self):
@@ -347,78 +347,60 @@ class OpcUaROSAction:
         rospy.logdebug("updated feedback cb reached")
         self.message_callback(feedback)
 
-# Get topic name from full action_name
-def get_correct_name(topic_name):
-    rospy.logdebug("getting correct name for: " + str(topic_name))
-    # rospy.loginfo('Topic name {}; corrected name: {}'.format(topic_name, result))
-    return path.dirname(topic_name)
+    # Get topic name from full action_name
+    @staticmethod
+    def get_correct_name(topic_name):
+        return path.dirname(topic_name)
 
+    @staticmethod
+    def map_status_to_string(param):
+        if param == 9:
+            return "Goal LOST"
+        elif param == 8:
+            return "Goal RECALLED"
+        elif param == 7:
+            return "Goal RECALLING"
+        elif param == 6:
+            return "Goal PREEMPTING"
+        elif param == 5:
+            return "Goal REJECTED"
+        elif param == 4:
+            return "Goal ABORTED"
+        elif param == 3:
+            return "Goal SUCEEDED"
+        elif param == 2:
+            return "Goal PREEMPTED"
+        elif param == 1:
+            return "Goal ACTIVE"
+        elif param == 0:
+            return "Goal PENDING"
 
-def getargarray(goal_class):
-    array = []
-    for slot_name in goal_class.__slots__:
-        if slot_name != 'header':
-            slot = getattr(goal_class, slot_name)
-            if hasattr(slot, '_type'):
-                array_to_merge = getargarray(slot)
-                array.extend(array_to_merge)
-            else:
-                arg = ua.Argument()
-                arg.ValueRank = -1
-                arg.ArrayDimensions = [] # FIXME differs from ros_services.py is this a bug?
-                if isinstance(slot, list):
-                    rospy.logdebug("Found an Array Argument!")
-                    arg.Name = slot_name
-                    arg.DataType = ua.NodeId(ros_services.getobjectidfromtype("array"))
-                    arg.Description = ua.LocalizedText("Array")
+    # TODO perhaps can become a non-static method
+    @staticmethod
+    def getargarray(goal_class):
+        array = []
+        for slot_name in goal_class.__slots__:
+            if slot_name != 'header':
+                slot = getattr(goal_class, slot_name)
+                if hasattr(slot, '_type'):
+                    array_to_merge = OpcUaROSAction.getargarray(slot)
+                    array.extend(array_to_merge)
                 else:
-                    if hasattr(goal_class, "__name__"):
-                        arg.Name = goal_class.__name__ + slot_name
-                    else:
+                    arg = ua.Argument()
+                    arg.ValueRank = -1
+                    arg.ArrayDimensions = [] # FIXME differs from ros_services.py is this a bug?
+                    if isinstance(slot, list):
+                        rospy.logdebug("Found an Array Argument!")
                         arg.Name = slot_name
-                    arg.DataType = ua.NodeId(ros_services.getobjectidfromtype(type(slot).__name__))
-                    arg.Description = ua.LocalizedText(slot_name)
-                array.append(arg)
+                        arg.DataType = ua.NodeId(ros_services.getobjectidfromtype("array"))
+                        arg.Description = ua.LocalizedText("Array")
+                    else:
+                        if hasattr(goal_class, "__name__"):
+                            arg.Name = goal_class.__name__ + slot_name
+                        else:
+                            arg.Name = slot_name
+                        arg.DataType = ua.NodeId(ros_services.getobjectidfromtype(type(slot).__name__))
+                        arg.Description = ua.LocalizedText(slot_name)
+                    array.append(arg)
 
-    return array
-
-
-def map_status_to_string(param):
-    if param == 9:
-        return "Goal LOST"
-    elif param == 8:
-        return "Goal RECALLED"
-    elif param == 7:
-        return "Goal RECALLING"
-    elif param == 6:
-        return "Goal PREEMPTING"
-    elif param == 5:
-        return "Goal REJECTED"
-    elif param == 4:
-        return "Goal ABORTED"
-    elif param == 3:
-        return "Goal SUCEEDED"
-    elif param == 2:
-        return "Goal PREEMPTED"
-    elif param == 1:
-        return "Goal ACTIVE"
-    elif param == 0:
-        return "Goal PENDING"
-
-
-def refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions):
-    topics = rospy.get_published_topics(namespace_ros)
-    tobedeleted = []
-    for actionNameOPC in actionsdict:
-        found = False
-        for topicROS, topic_type in topics:
-            ros_server.own_rosnode_cleanup()
-            if actionNameOPC in topicROS:
-                found = True
-        if not found:
-            actionsdict[actionNameOPC].recursive_delete_items(actionsdict[actionNameOPC].parent)
-            tobedeleted.append(actionNameOPC)
-            rospy.logdebug("deleting action: " + actionNameOPC)
-            ros_server.own_rosnode_cleanup()
-    for name in tobedeleted:
-        del actionsdict[name]
+        return array

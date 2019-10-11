@@ -35,8 +35,8 @@ class OpcUaROSService:
         # Build the Array of inputs
         self.sample_req = self._class._request_class()
         self.sample_resp = self._class._response_class()
-        inputs = getargarray(self.sample_req)
-        self.outputs = getargarray(self.sample_resp)
+        inputs = OpcUaROSService.getargarray(self.sample_req)
+        self.outputs = OpcUaROSService.getargarray(self.sample_resp)
         self.method = self.parent.add_method(idx, self.name, self.call_service, inputs, self.outputs)
         rospy.loginfo("Created ROS Service with name: %s", self.name)
 
@@ -148,29 +148,72 @@ class OpcUaROSService:
                                                          newparent)
         return parent
 
-
-def getargarray(sample_req):
-    array = []
-    for slot_name in sample_req.__slots__:
-        slot = getattr(sample_req, slot_name)
-        if hasattr(slot, '_type'):
-            array_to_merge = getargarray(slot)
-            array.extend(array_to_merge)
-        else:
-            arg = ua.Argument()
-            arg.Name = slot_name
-            arg.ValueRank = -1
-            if isinstance(slot, list):
-                arg.DataType = ua.NodeId(getobjectidfromtype("array"))
-                arg.ArrayDimensions = [1]
-                arg.Description = ua.LocalizedText("Array")
+    @staticmethod
+    def getargarray(sample_req):
+        array = []
+        for slot_name in sample_req.__slots__:
+            slot = getattr(sample_req, slot_name)
+            if hasattr(slot, '_type'):
+                array_to_merge = OpcUaROSService.getargarray(slot)
+                array.extend(array_to_merge)
             else:
-                arg.DataType = ua.NodeId(getobjectidfromtype(type(slot).__name__))
-                arg.ArrayDimensions = []
-                arg.Description = ua.LocalizedText(slot_name)
-            array.append(arg)
+                arg = ua.Argument()
+                arg.Name = slot_name
+                arg.ValueRank = -1
+                if isinstance(slot, list):
+                    arg.DataType = ua.NodeId(OpcUaROSService.getobjectidfromtype("array"))
+                    arg.ArrayDimensions = [1]
+                    arg.Description = ua.LocalizedText("Array")
+                else:
+                    arg.DataType = ua.NodeId(OpcUaROSService.getobjectidfromtype(type(slot).__name__))
+                    arg.ArrayDimensions = []
+                    arg.Description = ua.LocalizedText(slot_name)
+                array.append(arg)
 
-    return array
+        return array
+
+    @staticmethod
+    def getobjectidfromtype(type_name):
+        lc_type_name = string.lower(type_name)
+        if type_name == 'bool':
+            dv = ua.ObjectIds.Boolean
+        elif type_name == 'byte':
+            dv = ua.ObjectIds.Byte
+        elif type_name == 'int':
+            dv = ua.ObjectIds.Int16
+        elif type_name == 'int8':
+            dv = ua.ObjectIds.SByte
+        elif type_name == 'uint8':
+            dv = ua.ObjectIds.Byte
+        elif type_name == 'int16':
+            dv = ua.ObjectIds.Int16
+            rospy.roswarn("Int16??")
+        elif type_name == 'uint16':
+            dv = ua.ObjectIds.UInt16
+        elif type_name == 'int32':
+            dv = ua.ObjectIds.Int32
+        elif type_name == 'uint32':
+            dv = ua.ObjectIds.UInt32
+        elif type_name == 'int64':
+            dv = ua.ObjectIds.Int64
+        elif type_name == 'uint64':
+            dv = ua.ObjectIds.UInt64
+        elif type_name == 'float' or type_name == 'float32' or type_name == 'float64':
+            dv = ua.ObjectIds.Float
+        elif type_name == 'double':
+            dv = ua.ObjectIds.Double
+        elif type_name == 'string' or type_name == 'str':
+            dv = ua.ObjectIds.String
+        elif type_name == 'array':
+            dv = ua.ObjectIds.Enumeration
+        elif lc_type_name == 'time':
+            dv = ua.ObjectIds.Time
+        elif lc_type_name == 'duration':
+            dv = ua.ObjectIds.UInt32 # We probably need a custom type for this, the built-in duration is msecs, ROS uses nsecs
+        else:
+            rospy.logerr("Can't create type with name " + type_name)
+            return None
+        return dv
 
 
 def refresh_services(namespace_ros, server, servicesdict, idx, services_object_opc):
@@ -208,46 +251,3 @@ def refresh_services(namespace_ros, server, servicesdict, idx, services_object_o
     # TODO move this function to ros_server, and directly assign dict
     servicesdict.clear()
     servicesdict.update(newServices)
-
-
-def getobjectidfromtype(type_name):
-    lc_type_name = string.lower(type_name)
-    if type_name == 'bool':
-        dv = ua.ObjectIds.Boolean
-    elif type_name == 'byte':
-        dv = ua.ObjectIds.Byte
-    elif type_name == 'int':
-        dv = ua.ObjectIds.Int16
-    elif type_name == 'int8':
-        dv = ua.ObjectIds.SByte
-    elif type_name == 'uint8':
-        dv = ua.ObjectIds.Byte
-    elif type_name == 'int16':
-        dv = ua.ObjectIds.Int16
-        rospy.roswarn("Int16??")
-    elif type_name == 'uint16':
-        dv = ua.ObjectIds.UInt16
-    elif type_name == 'int32':
-        dv = ua.ObjectIds.Int32
-    elif type_name == 'uint32':
-        dv = ua.ObjectIds.UInt32
-    elif type_name == 'int64':
-        dv = ua.ObjectIds.Int64
-    elif type_name == 'uint64':
-        dv = ua.ObjectIds.UInt64
-    elif type_name == 'float' or type_name == 'float32' or type_name == 'float64':
-        dv = ua.ObjectIds.Float
-    elif type_name == 'double':
-        dv = ua.ObjectIds.Double
-    elif type_name == 'string' or type_name == 'str':
-        dv = ua.ObjectIds.String
-    elif type_name == 'array':
-        dv = ua.ObjectIds.Enumeration
-    elif lc_type_name == 'time':
-        dv = ua.ObjectIds.Time
-    elif lc_type_name == 'duration':
-        dv = ua.ObjectIds.UInt32 # We probably need a custom type for this, the built-in duration is msecs, ROS uses nsecs
-    else:
-        rospy.logerr("Can't create type with name " + type_name)
-        return None
-    return dv

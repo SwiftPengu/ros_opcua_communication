@@ -14,6 +14,7 @@ import opcua
 import ros_actions
 import ros_server
 import rostopic
+import refreshing
 
 import traceback
 
@@ -324,6 +325,34 @@ def numberofsubscribers(nametolookfor, topicsDict):
     return topicsDict[nametolookfor]._subscriber.get_num_connections()
 
 
+
+
+
+def get_feedback_type(action_name):
+    try:
+        type, name, fn = rostopic.get_topic_type("{}/feedback".format(action_name))
+        return type
+    except rospy.ROSException as e:
+        try:
+            type, name, fn = rostopic.get_topic_type("{action_name}/Feedback", e)
+            return type
+        except rospy.ROSException as e2:
+            rospy.logerr("Couldnt find feedback type for action {}".format(action_name), e2)
+            return None
+
+
+def get_goal_type(action_name):
+    try:
+        type, name, fn = rostopic.get_topic_type("{}/goal".format(action_name))
+        return type
+    except rospy.ROSException as e:
+        try:
+            type, name, fn = rostopic.get_topic_type("{}/Goal".format(action_name), e)
+            return type
+        except rospy.ROSException as e2:
+            rospy.logerr("Couldnt find feedback type for action {}".format(action_name), e2)
+            return None
+
 def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, idx_topics, idx_actions, topics,
                                actions):
     needCleanup = False
@@ -334,7 +363,7 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
             if "cancel" in topic_name or "result" in topic_name or "feedback" in topic_name or "goal" in topic_name or "status" in topic_name:
                 rospy.logdebug("Found an action: " + str(topic_name))
                 
-                correct_name = ros_actions.get_correct_name(topic_name)
+                correct_name = ros_actions.OpcUaROSAction.get_correct_name(topic_name)
                 rospy.logdebug('Skipping generation of action {}'.format(correct_name))
                 continue # Disabled actions for debugging purposes
                 
@@ -387,34 +416,8 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
     # topicsdict.clear()
     topicsdict.update(newTopics)
 
-    ros_actions.refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions)
+    refreshing.refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions)
 
     if needCleanup:
         rospy.loginfo('Cleaning up rosnode')
         ros_server.own_rosnode_cleanup()
-
-
-def get_feedback_type(action_name):
-    try:
-        type, name, fn = rostopic.get_topic_type("{}/feedback".format(action_name))
-        return type
-    except rospy.ROSException as e:
-        try:
-            type, name, fn = rostopic.get_topic_type("{action_name}/Feedback", e)
-            return type
-        except rospy.ROSException as e2:
-            rospy.logerr("Couldnt find feedback type for action {}".format(action_name), e2)
-            return None
-
-
-def get_goal_type(action_name):
-    try:
-        type, name, fn = rostopic.get_topic_type("{}/goal".format(action_name))
-        return type
-    except rospy.ROSException as e:
-        try:
-            type, name, fn = rostopic.get_topic_type("{}/Goal".format(action_name), e)
-            return type
-        except rospy.ROSException as e2:
-            rospy.logerr("Couldnt find feedback type for action {}".format(action_name), e2)
-            return None
