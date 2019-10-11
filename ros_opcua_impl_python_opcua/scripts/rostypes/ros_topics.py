@@ -130,22 +130,20 @@ class OpcUaROSTopic:
             if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
                 self._update_struct(topic_name, message)
 
-            # Lists, currently missing from the server
+            # Lists
             elif type(message) in (list, tuple):
-                # Some messages have slots, others don't
-                # rospy.loginfo('[{}] Message is a list or tuple, len: {}'.format(topic_name, len(message)))
-                #if (len(message) > 0) and hasattr(message[0], '__slots__'):
+                # Some messages have slots (e.g. multipart messages)
                 self._update_list(topic_name, message)
 
                 # remove obsolete children
                 if topic_name in self._nodes:
                     if len(message) < len(self._nodes[topic_name].get_children()):
                         for i in range(len(message), self._nodes[topic_name].childCount()):
+                            rospy.loginfo('Warning, deleting stuff!')
                             item_topic_name = topic_name + '[%d]' % i
                             self.recursive_delete_items(self._nodes[item_topic_name])
                             del self._nodes[item_topic_name]
             else:
-                # Not missing
                 self._update_val(topic_name, message)
 
     def _update_struct(self, topic_name, message):
@@ -157,6 +155,7 @@ class OpcUaROSTopic:
     def _update_list(self, topic_name, message):
         if (len(message) > 0):
             # rospy.loginfo('[{}] Processing array, len: {}'.format(topic_name, len(message)))
+            # enumerate(message)
             for index, slot in enumerate(message):
                 if '{}[{}]'.format(topic_name, index) in self._nodes:
                     self.update_value(topic_name + '[%d]' % index, slot)
@@ -166,7 +165,7 @@ class OpcUaROSTopic:
                         # rospy.loginfo('[{}] Topic in self.nodes'.format(topic_name))
                         base_type_str, _ = _extract_array_info(
                             self._nodes[topic_name].text(self.type_name))
-                        self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index,
+                        self._recursive_create_items(self._nodes[topic_name], self.idx, topic_name + '[%d]' % index,
                                                     base_type_str,
                                                     slot, None)
                     else:
@@ -175,7 +174,7 @@ class OpcUaROSTopic:
                         # rospy.loginfo('[{}] skipped'.format(topic_name))
                         # rospy.loginfo(self._nodes)
         else:
-            rospy.loginfo('[{}] Message skipped (list), len: {}'.format(topic_name, len(message)))
+            rospy.loginfo('[{}] Message skipped (list), len: {} | {}'.format(topic_name, len(message), message))
             # rospy.loginfo('Message: {}'.format(str(message)))
 
     def _update_val(self, topic_name, message):
@@ -257,7 +256,7 @@ def correct_type(node, typemessage):
         return None
     return result
 
-
+# Obtains the array type and its size (if it has a static size)
 def _extract_array_info(type_str):
     array_size = None
     if '[' in type_str and type_str[-1] == ']':
@@ -323,9 +322,6 @@ def numberofsubscribers(nametolookfor, topicsDict):
     if nametolookfor == "/rosout":
         return 2 # rosout only has one subscriber/publisher at all times
     return topicsDict[nametolookfor]._subscriber.get_num_connections()
-
-
-
 
 
 def get_feedback_type(action_name):
