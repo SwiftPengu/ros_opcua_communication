@@ -12,7 +12,7 @@ import rosservice
 import string
 from opcua import ua, uamethod, common
 
-import ros_server
+import common
 
 
 class OpcUaROSService:
@@ -118,7 +118,6 @@ class OpcUaROSService:
                 del self._nodes[child]
             self.server.server.delete_nodes([child])
         self.server.server.delete_nodes([self.method])
-        ros_server.own_rosnode_cleanup()
 
     def recursive_create_objects(self, name, idx, parent):
         hierachy = name.split('/')
@@ -131,20 +130,20 @@ class OpcUaROSService:
                     rospy.logdebug("nodewithsamename for name: " + str(name) + " is : " + str(nodewithsamename))
                     if nodewithsamename is not None:
                         rospy.logdebug("recursive call for same name for: " + name)
-                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
+                        return self.recursive_create_objects(common.nextname(hierachy, hierachy.index(name)), idx,
                                                              nodewithsamename)
                     else:
                         newparent = parent.add_object(
                             ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
+                        return self.recursive_create_objects(common.nextname(hierachy, hierachy.index(name)), idx,
                                                              newparent)
-                except (IndexError, common.uaerrors.UaError):
+                except (IndexError):
                     newparent = parent.add_object(
                         ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
                                   ua.NodeIdType.String),
                         ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                    return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
+                    return self.recursive_create_objects(common.nextname(hierachy, hierachy.index(name)), idx,
                                                          newparent)
         return parent
 

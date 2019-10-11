@@ -11,9 +11,9 @@ from opcua import uamethod
 from opcua.ua.uaerrors import UaError
 from roslib import message
 
-import ros_server
 import ros_services
 import ros_topics
+import common
 
 # DEBUG
 import sys
@@ -167,7 +167,7 @@ class OpcUaROSAction:
                     nodewithsamename = self.server.find_action_node_with_same_name(name, idx)
                     if nodewithsamename is not None:
                         rospy.logdebug("Found node with same name, is now new parent")
-                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
+                        return self.recursive_create_objects(common.nextname(hierachy, hierachy.index(name)), idx,
                                                              nodewithsamename)
                     else:
                         # if for some reason 2 services with exactly same name are created use hack>: add random int, prob to hit two
@@ -175,7 +175,7 @@ class OpcUaROSAction:
                         newparent = parent.add_object(
                             ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
+                        return self.recursive_create_objects(common.nextname(hierachy, hierachy.index(name)), idx,
                                                              newparent)
                 # thrown when node with parent name is not existent in server
                 except (IndexError, UaError):
@@ -183,7 +183,7 @@ class OpcUaROSAction:
                         ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
                                   ua.NodeIdType.String),
                         ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                    return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
+                    return self.recursive_create_objects(common.nextname(hierachy, hierachy.index(name)), idx,
                                                          newparent)
 
         return parent
@@ -332,7 +332,6 @@ class OpcUaROSAction:
             self.recursive_delete_items(child)
             self.server.server.delete_nodes([child])
         self.server.server.delete_nodes([self.result, self.result_node, self.goal_node, self.goal, self.parent])
-        ros_server.own_rosnode_cleanup()
 
     def update_result(self, state, result):
         rospy.logdebug("updated result cb reached")

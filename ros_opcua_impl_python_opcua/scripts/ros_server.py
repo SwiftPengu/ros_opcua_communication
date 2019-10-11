@@ -7,29 +7,12 @@ import rosnode
 import rospy
 import opcua
 
-import ros_services
-import ros_topics
+from rostypes import ros_services, ros_topics
 import os
 
 HOST = os.environ.get('HOST', '0.0.0.0')
 PORT = os.environ.get('PORT', 21554)
 NS = os.environ.get('NS', '/') # alternative for using the params.yaml file
-
-# Returns the hierachy as one string from the first remaining part on.
-def nextname(hierachy, last_processed_index):
-    try:
-        result = "".join(map(str, hierachy[last_processed_index+1:]))
-    except Exception as e:
-        rospy.logerr("Error encountered ", e)
-    return result
-
-
-def own_rosnode_cleanup():
-    pinged, unpinged = rosnode.rosnode_ping_all()
-    if unpinged:
-        master = rosgraph.Master(rosnode.ID)
-        # noinspection PyTypeChecker
-        rosnode.cleanup_master_blacklist(master, unpinged)
 
 
 class ROSServer:
@@ -75,8 +58,9 @@ class ROSServer:
                 rospy.logdebug('Checking for new services, topics and actions')
                 ros_services.refresh_services(self.namespace_ros, self, self.servicesDict, self.idx_services, self.services_object)
                 ros_topics.refresh_topics_and_actions(self.namespace_ros, self, self.topicsDict, self.actionsDict, self.idx_topics, self.idx_actions, self.topics_object, self.actions_object)
+                self.own_rosnode_cleanup()
                 # Don't clog cpu
-                quit()
+                # quit()
                 time.sleep(2)
         finally:
             # Always attempt to clean up
@@ -112,6 +96,13 @@ class ROSServer:
                 rospy.logdebug("Found match for name: " + name)
                 return self.actionsDict[topic].parent
         return None
+
+    def own_rosnode_cleanup(self):
+        pinged, unpinged = rosnode.rosnode_ping_all()
+        if unpinged:
+            master = rosgraph.Master(rosnode.ID)
+            # noinspection PyTypeChecker
+            rosnode.cleanup_master_blacklist(master, unpinged)
 
 
 def main(args):

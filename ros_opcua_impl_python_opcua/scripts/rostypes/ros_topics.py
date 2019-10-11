@@ -12,9 +12,9 @@ from opcua import ua, uamethod
 import opcua
 
 import ros_actions
-import ros_server
 import rostopic
 import refreshing
+import common
 
 import traceback
 
@@ -218,7 +218,7 @@ class OpcUaROSTopic:
                 try:
                     nodewithsamename = self.server.find_topics_node_with_same_name(name, idx)
                     if nodewithsamename is not None:
-                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
+                        return self.recursive_create_objects(common.nextname(hierachy, hierachy.index(name)), idx,
                                                              nodewithsamename)
                     else:
                         # if for some reason 2 services with exactly same name are created use hack>: add random int, prob to hit two
@@ -226,7 +226,7 @@ class OpcUaROSTopic:
                         newparent = parent.add_object(
                             ua.NodeId(name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
                             ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                        return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
+                        return self.recursive_create_objects(common.nextname(hierachy, hierachy.index(name)), idx,
                                                              newparent)
                 # thrown when node with parent name is not existent in server or when nodeid already exists (perhaps that error should be unrecoverable)
                 except (IndexError, opcua.ua.uaerrors._auto.BadNodeIdExists):
@@ -234,7 +234,7 @@ class OpcUaROSTopic:
                         ua.NodeId(name + str(random.randint(0, 10000)), parent.nodeid.NamespaceIndex,
                                   ua.NodeIdType.String),
                         ua.QualifiedName(name, parent.nodeid.NamespaceIndex))
-                    return self.recursive_create_objects(ros_server.nextname(hierachy, hierachy.index(name)), idx,
+                    return self.recursive_create_objects(common.nextname(hierachy, hierachy.index(name)), idx,
                                                          newparent)
 
         return parent
@@ -355,7 +355,6 @@ def get_goal_type(action_name):
 
 def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, idx_topics, idx_actions, topics,
                                actions):
-    needCleanup = False
     ros_topics = rospy.get_published_topics(namespace_ros)
     for topic_name, topic_type in ros_topics:
         # Create new topics if they are not in the current dict
@@ -396,7 +395,6 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
         elif numberofsubscribers(topic_name, topicsdict) <= 1 and "rosout" not in topic_name:
             topicsdict[topic_name].recursive_delete_items(server.server.get_node(ua.NodeId(topic_name, idx_topics)))
             del topicsdict[topic_name]
-            needCleanup = True
 
     # ros_topics = rospy.get_published_topics(namespace_ros)
     # All current topics which are also present at ROS, we have created all new topics, so only need to remove old topics.
@@ -417,7 +415,3 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
     topicsdict.update(newTopics)
 
     refreshing.refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions)
-
-    if needCleanup:
-        rospy.loginfo('Cleaning up rosnode')
-        ros_server.own_rosnode_cleanup()
