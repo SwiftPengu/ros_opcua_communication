@@ -127,38 +127,14 @@ class OpcUaROSTopic:
         if '/tf' in topic_name:
             # Structs
             if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
-                # rospy.loginfo('updating slots of topic {}'.format(topic_name))
-                for slot_name in message.__slots__:
-                    # rospy.loginfo('updating slot of topic {}: {}'.format(topic_name, slot_name))
-                    self.update_value('{}/{}'.format(topic_name,slot_name), getattr(message, slot_name))
+                self._update_struct(topic_name, message)
 
             # Lists, currently missing from the server
             elif type(message) in (list, tuple):
                 # Some messages have slots, others don't
                 # rospy.loginfo('[{}] Message is a list or tuple, len: {}'.format(topic_name, len(message)))
                 #if (len(message) > 0) and hasattr(message[0], '__slots__'):
-                if (len(message) > 0):
-                    # rospy.loginfo('[{}] Processing array, len: {}'.format(topic_name, len(message)))
-                    for index, slot in enumerate(message):
-                        if '{}[{}]'.format(topic_name, index) in self._nodes:
-                            self.update_value(topic_name + '[%d]' % index, slot)
-                        else:
-                            # rospy.loginfo('[{}[{}]] Topic not in self.nodes'.format(topic_name, index))
-                            if topic_name in self._nodes:
-                                # rospy.loginfo('[{}] Topic in self.nodes'.format(topic_name))
-                                base_type_str, _ = _extract_array_info(
-                                    self._nodes[topic_name].text(self.type_name))
-                                self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index,
-                                                            base_type_str,
-                                                            slot, None)
-                            else:
-                                # FIXME unbounded arrays have no nodes, so new ones are needed
-                                pass # not handled!
-                                # rospy.loginfo('[{}] skipped'.format(topic_name))
-                                # rospy.loginfo(self._nodes)
-                else:
-                    rospy.loginfo('[{}] Message skipped, len: {}'.format(topic_name, len(message)))
-                    # rospy.loginfo('Message: {}'.format(str(message)))
+                self._update_list(topic_name, message)
 
                 # remove obsolete children
                 if topic_name in self._nodes:
@@ -169,11 +145,44 @@ class OpcUaROSTopic:
                             del self._nodes[item_topic_name]
             else:
                 # Not missing
-                rospy.loginfo('Message set to repr {}, repr: {}'.format(topic_name, repr(message)))
-                if topic_name in self._nodes and self._nodes[topic_name] is not None:
-                    self._nodes[topic_name].set_value(repr(message))
+                self._update_val(topic_name, message)
+
+    def _update_struct(self, topic_name, message):
+        # rospy.loginfo('updating slots of topic {}'.format(topic_name))
+        for slot_name in message.__slots__:
+            # rospy.loginfo('updating slot of topic {}: {}'.format(topic_name, slot_name))
+            self.update_value('{}/{}'.format(topic_name,slot_name), getattr(message, slot_name))
+
+    def _update_list(self, topic_name, message):
+        if (len(message) > 0):
+            # rospy.loginfo('[{}] Processing array, len: {}'.format(topic_name, len(message)))
+            for index, slot in enumerate(message):
+                if '{}[{}]'.format(topic_name, index) in self._nodes:
+                    self.update_value(topic_name + '[%d]' % index, slot)
                 else:
-                    rospy.loginfo('Message skipped (2) {}, len: {}'.format(topic_name, len(message)))
+                    # rospy.loginfo('[{}[{}]] Topic not in self.nodes'.format(topic_name, index))
+                    if topic_name in self._nodes:
+                        # rospy.loginfo('[{}] Topic in self.nodes'.format(topic_name))
+                        base_type_str, _ = _extract_array_info(
+                            self._nodes[topic_name].text(self.type_name))
+                        self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index,
+                                                    base_type_str,
+                                                    slot, None)
+                    else:
+                        # FIXME unbounded arrays have no nodes, so new ones are needed
+                        pass # not handled!
+                        # rospy.loginfo('[{}] skipped'.format(topic_name))
+                        # rospy.loginfo(self._nodes)
+        else:
+            rospy.loginfo('[{}] Message skipped (list), len: {}'.format(topic_name, len(message)))
+            # rospy.loginfo('Message: {}'.format(str(message)))
+
+    def _update_val(self, topic_name, message):
+        # rospy.loginfo('Message set to repr {}, repr: {}'.format(topic_name, repr(message)))
+        if topic_name in self._nodes and self._nodes[topic_name] is not None:
+            self._nodes[topic_name].set_value(repr(message))
+        else:
+            rospy.logwarn('Message skipped (repr) {}, len: {}'.format(topic_name, len(message)))
 
     def recursive_delete_items(self, item):
         self._publisher.unregister()
