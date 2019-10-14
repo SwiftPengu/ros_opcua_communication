@@ -191,6 +191,7 @@ class OpcUaROSTopic:
                     else:
                         # FIXME unbounded arrays have no nodes, so new ones are needed
                         rospy.logwarn('Node not handled: {}'.format(topic_name))
+                # TODO remove items which are missing (e.g. when a list moves from len 6 to len 4)
         else:
             rospy.loginfo('[{}] Message skipped (list), len: {} | {}'.format(topic_name, len(message), message))
             # rospy.loginfo('Message: {}'.format(str(message)))
