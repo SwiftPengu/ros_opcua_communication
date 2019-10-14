@@ -15,6 +15,7 @@ import ros_actions
 import rostopic
 import refreshing
 import common
+import itertools
 
 import traceback
 
@@ -83,9 +84,9 @@ class OpcUaROSTopic:
             except (ValueError, TypeError):
                 base_instance = None
 
-            if '/tf' in topic_name:
-                rospy.loginfo('RCC [{}] {}'.format(topic_name, type_name))
-                rospy.loginfo('RCC [{}] {} {}'.format(topic_name, base_type_str, array_size))
+            # if '/tf' in topic_name:
+            #     rospy.loginfo('RCC [{}] {}'.format(topic_name, type_name))
+            #     rospy.loginfo('RCC [{}] {} {}'.format(topic_name, base_type_str, array_size))
 
             if array_size is not None and hasattr(base_instance, '__slots__'):
                 # Create nodes for unbounded arrays
@@ -173,14 +174,23 @@ class OpcUaROSTopic:
                 else:
                     # rospy.loginfo('[{}[{}]] Topic not in self.nodes'.format(topic_name, index))
                     if topic_name in self._nodes:
-                        base_type_str, _ = _extract_array_info(
-                            self._nodes[topic_name].text(self.type_name))
+                        # Get the type property
+                        typeProp = None
+                        try:
+                            typeProp = next(itertools.ifilter(lambda p: p.get_display_name().Text == 'Type', self._nodes[topic_name].get_properties()))
+                        except StopIteration:
+                            rospy.logerr('Bug? Node has no type! Topic: {}'.format(topic_name))
+                            return
+                        # Remove array marks from the type to get the 'base_type'
+                        type_str = typeProp.get_value()
+                        assert(type_str[-2:] == '[]')
+                        base_type_str = typeProp.get_value()[:-2]
                         self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index,
                                                     base_type_str,
                                                     slot, None)
                     else:
                         # FIXME unbounded arrays have no nodes, so new ones are needed
-                        pass # not handled!
+                        rospy.logwarn('Node not handled: {}'.format(topic_name))
         else:
             rospy.loginfo('[{}] Message skipped (list), len: {} | {}'.format(topic_name, len(message), message))
             # rospy.loginfo('Message: {}'.format(str(message)))
