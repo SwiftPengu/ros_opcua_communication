@@ -84,10 +84,6 @@ class OpcUaROSTopic:
             except (ValueError, TypeError):
                 base_instance = None
 
-            # if '/tf' in topic_name:
-            #     rospy.loginfo('RCC [{}] {}'.format(topic_name, type_name))
-            #     rospy.loginfo('RCC [{}] {} {}'.format(topic_name, base_type_str, array_size))
-
             if array_size is not None and hasattr(base_instance, '__slots__'):
                 # Create nodes for unbounded arrays
                 if array_size == 0:
@@ -137,28 +133,33 @@ class OpcUaROSTopic:
 
     # Method which publishes ROS topic updates to OPC-UA
     def update_value(self, topic_name, message):
-        if '/tf' in topic_name:
-            # Structs
-            if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
-                self._update_struct(topic_name, message)
+        # skip dynamic reconfigure
+        if 'parameter_descriptions' in topic_name:
+            return
+        if 'parameter_updates' in topic_name:
+            return
 
-            # Lists
-            elif type(message) in (list, tuple):
-                # Some messages have slots (e.g. multipart messages)
-                self._update_list(topic_name, message)
+        # Structs
+        if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
+            self._update_struct(topic_name, message)
 
-                # remove obsolete children
-                if topic_name in self._nodes:
-                    # more robust child count
-                    childCount = len(filter(lambda c: c.get_display_name().Text != 'Type', self._nodes[topic_name].get_children()))
-                    if len(message) < childCount:
-                        for i in range(len(message), childCount):
-                            rospy.loginfo('Warning, deleting stuff!')
-                            item_topic_name = topic_name + '[%d]' % i
-                            self.recursive_delete_items(self._nodes[item_topic_name])
-                            del self._nodes[item_topic_name]
-            else:
-                self._update_val(topic_name, message)
+        # Lists
+        elif type(message) in (list, tuple):
+            # Some messages have slots (e.g. multipart messages)
+            self._update_list(topic_name, message)
+
+            # remove obsolete children
+            if topic_name in self._nodes:
+                # more robust child count
+                childCount = len(filter(lambda c: c.get_display_name().Text != 'Type', self._nodes[topic_name].get_children()))
+                if len(message) < childCount:
+                    for i in range(len(message), childCount):
+                        rospy.loginfo('Warning, deleting stuff!')
+                        item_topic_name = topic_name + '[%d]' % i
+                        self.recursive_delete_items(self._nodes[item_topic_name])
+                        del self._nodes[item_topic_name]
+        else:
+            self._update_val(topic_name, message)
 
     def _update_struct(self, topic_name, message):
         # rospy.loginfo('updating slots of topic {}'.format(topic_name))
@@ -182,7 +183,10 @@ class OpcUaROSTopic:
                             typeProp = next(itertools.ifilter(lambda p: p.get_display_name().Text == 'Type', self._nodes[topic_name].get_properties()))
                         except StopIteration:
                             rospy.logerr('Bug? Node has no type! Topic: {}'.format(topic_name))
+                            rospy.loginfo(self._nodes[topic_name])
+                            rospy.loginfo(self._nodes[topic_name].get_properties())
                             return
+
                         # Remove array marks from the type to get the 'base_type'
                         type_str = typeProp.get_value()
                         assert(type_str[-2:] == '[]')
@@ -326,9 +330,6 @@ def _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array
     else:
         rospy.logwarn("can't create node with type {} for topic {}".format(type_name, topic_name))
         return None
-    
-    if '/tf' in topic_name:
-        rospy.loginfo('Selected variant {}'.format(dv))
 
     if array_size is not None and array_size > 0:
         value = []
