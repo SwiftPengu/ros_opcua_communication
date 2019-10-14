@@ -149,8 +149,10 @@ class OpcUaROSTopic:
 
                 # remove obsolete children
                 if topic_name in self._nodes:
-                    if len(message) < len(self._nodes[topic_name].get_children()):
-                        for i in range(len(message), self._nodes[topic_name].childCount()):
+                    # more robust child count
+                    childCount = len(filter(lambda c: c.get_display_name().Text != 'Type', self._nodes[topic_name].get_children()))
+                    if len(message) < childCount:
+                        for i in range(len(message), childCount):
                             rospy.loginfo('Warning, deleting stuff!')
                             item_topic_name = topic_name + '[%d]' % i
                             self.recursive_delete_items(self._nodes[item_topic_name])
