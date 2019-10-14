@@ -53,6 +53,10 @@ class OpcUaROSTopic:
         if '[' in topic_text:
             topic_text = topic_text[topic_text.index('['):]
 
+        # skip dynamic type definitions
+        if 'dynamic_reconfigure' in type_name:
+            return
+
         # This here are 'complex datatypes'
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
             complex_type = True
@@ -84,16 +88,23 @@ class OpcUaROSTopic:
                 rospy.loginfo('RCC [{}] {} {}'.format(topic_name, base_type_str, array_size))
 
             if array_size is not None and hasattr(base_instance, '__slots__'):
-                if '/tf' in topic_name:
-                    rospy.loginfo('RCC [{}] Creating recursively'.format(topic_name))
-                # FIXME bug is here, no nodes are created for unbounded arrays
-                for index in range(array_size):
-                    if '/tf' in topic_name:
-                        rospy.loginfo('RCC [{}] Creating recursively {}'.format(topic_name, index))
-                    self._recursive_create_items(parent, topic_name + '[%d]' % index, base_type_str, base_instance)
+                # Create nodes for unbounded arrays
+                if array_size == 0:
+                    new_node = parent.add_object(ua.NodeId(topic_name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+                                         ua.QualifiedName(topic_name, parent.nodeid.NamespaceIndex))
+                    new_node.add_property(ua.NodeId(topic_name + ".Type", self.idx),
+                                  ua.QualifiedName("Type", parent.nodeid.NamespaceIndex), type_name)
+                    self._nodes[topic_name] = new_node
+                else:
+                    for index in range(array_size):
+                        self._recursive_create_items(parent, topic_name + '[%d]' % index, base_type_str, base_instance)
             else:
                 new_node = _create_node_with_type(parent, self.idx, topic_name, topic_text, type_name, array_size)
-                self._nodes[topic_name] = new_node
+                # Only add nodes if creation was successful
+                if new_node is not None:
+                    self._nodes[topic_name] = new_node
+                else:
+                    rospy.logwarn('Error creating node with type topic: {}, type: {}, skipping creation'.format(topic_name, type_name))
 
         if topic_name in self._nodes and self._nodes[topic_name].get_node_class() == ua.NodeClass.Variable:
             self._nodes[topic_name].set_writable(True)
@@ -162,7 +173,6 @@ class OpcUaROSTopic:
                 else:
                     # rospy.loginfo('[{}[{}]] Topic not in self.nodes'.format(topic_name, index))
                     if topic_name in self._nodes:
-                        # rospy.loginfo('[{}] Topic in self.nodes'.format(topic_name))
                         base_type_str, _ = _extract_array_info(
                             self._nodes[topic_name].text(self.type_name))
                         self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index,
@@ -171,8 +181,6 @@ class OpcUaROSTopic:
                     else:
                         # FIXME unbounded arrays have no nodes, so new ones are needed
                         pass # not handled!
-                        # rospy.loginfo('[{}] skipped'.format(topic_name))
-                        # rospy.loginfo(self._nodes)
         else:
             rospy.loginfo('[{}] Message skipped (list), len: {} | {}'.format(topic_name, len(message), message))
             # rospy.loginfo('Message: {}'.format(str(message)))
@@ -303,7 +311,7 @@ def _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array
     elif type_name == 'string':
         dv = ua.Variant('', ua.VariantType.String)
     else:
-        rospy.logerr("can't create node with type" + str(type_name))
+        rospy.logwarn("can't create node with type {} for topic {}".format(type_name, topic_name))
         return None
     
     if '/tf' in topic_name:
