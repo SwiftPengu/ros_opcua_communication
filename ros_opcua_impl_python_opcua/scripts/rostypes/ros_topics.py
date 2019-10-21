@@ -382,34 +382,12 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
                 
                 correct_name = ros_actions.OpcUaROSAction.get_correct_name(topic_name)
                 rospy.logdebug('Skipping generation of action {}'.format(correct_name))
-                continue # Disabled actions for debugging purposes
-                
-                # if correct_name not in actionsdict:
-                #     try:
-                #         goal_type = get_goal_type(correct_name)
-                #         if goal_type is not None: # do not register if the topic does not have a goal
-                #             rospy.loginfo("Creating Action with name: {}".format(correct_name))
-                            
-                #             action = ros_actions.OpcUaROSAction(server,
-                #                     actions,
-                #                     idx_actions,
-                #                     correct_name,
-                #                     goal_type,
-                #                     get_feedback_type(correct_name))
-                #             assert(action is not None)
-                #             actionsdict[correct_name] = action
-                #     # FIXME BadNodeIdExists is a bug and should be fixed, this prevents the entire server from crashing, see ros_actions.py
-                #     except (ValueError, TypeError, AttributeError, opcua.ua.uaerrors._auto.BadNodeIdExists) as e:
-                #         print(e)
-                #         traceback.print_exc()
-                #         rospy.logerr("Error while creating Action Objects for Action " + topic_name)
-
-            else:
-                # FIXME crashes when message type is not known
-                topic = OpcUaROSTopic(server, topics, idx_topics, topic_name, topic_type)
-                assert(topic is not None)
-                topicsdict[topic_name] = topic
-        # If we are no longer subscribed to the topic, remove it ??
+            
+            # FIXME crashes when message type is not known
+            topic = OpcUaROSTopic(server, topics, idx_topics, topic_name, topic_type)
+            assert(topic is not None)
+            topicsdict[topic_name] = topic
+        # if the topic was already seen, check if the topic has become ?? obsolete ??
         elif numberofsubscribers(topic_name, topicsdict) <= 1 and "rosout" not in topic_name:
             topicsdict[topic_name].recursive_delete_items(server.server.get_node(ua.NodeId(topic_name, idx_topics)))
             del topicsdict[topic_name]
@@ -432,4 +410,4 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
     # topicsdict.clear()
     topicsdict.update(newTopics)
 
-    refreshing.refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions)
+    # refreshing.refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions)

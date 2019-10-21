@@ -1,10 +1,5 @@
 # !/usr/bin/python
 # thanks to https://github.com/ros-visualization/rqt_common_plugins/blob/groovy-devel/rqt_action/src/rqt_action/action_plugin.py
-import random
-from pydoc import locate
-
-import actionlib
-import roslib
 import rospy
 from opcua import ua, common
 from opcua import uamethod
