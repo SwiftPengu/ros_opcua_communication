@@ -13,6 +13,7 @@ import os
 HOST = os.environ.get('HOST', '0.0.0.0')
 PORT = os.environ.get('PORT', 21554)
 NS = os.environ.get('NS', '/') # alternative for using the params.yaml file
+LOGLEVEL = os.environ.get('ROS_LOGLEVEL', rospy.INFO)
 
 
 class ROSServer:
@@ -22,7 +23,7 @@ class ROSServer:
         self.topicsDict = {}
         self.servicesDict = {}
         self.actionsDict = {}
-        rospy.init_node("rosopcua")
+        rospy.init_node("rosopcua", log_level=int(LOGLEVEL))
 
     def initOPCUA(self):
         # OPC-UA server
