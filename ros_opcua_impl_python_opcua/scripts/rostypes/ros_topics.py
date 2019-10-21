@@ -193,9 +193,7 @@ class OpcUaROSTopic:
 
     def _update_struct(self, topic_name, message):
         rospy.logdebug('Update struct')
-        # rospy.loginfo('updating slots of topic {}'.format(topic_name))
         for slot_name in message.__slots__:
-            # rospy.loginfo('updating slot of topic {}: {}'.format(topic_name, slot_name))
             self.update_value('{}/{}'.format(topic_name,slot_name), getattr(message, slot_name))
 
     def _update_list(self, topic_name, message):
