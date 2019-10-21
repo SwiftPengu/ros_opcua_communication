@@ -185,9 +185,10 @@ class OpcUaROSTopic:
                     for i in range(len(message), childCount):
                         # FIXME broken with new array support feature
                         # rospy.loginfo('Warning, deleting stuff!')
-                        item_topic_name = topic_name + '[%d]' % i
-                        self.recursive_delete_items(self._nodes[item_topic_name])
-                        del self._nodes[item_topic_name]
+                        # item_topic_name = topic_name + '[%d]' % i
+                        # self.recursive_delete_items(self._nodes[item_topic_name])
+                        # del self._nodes[item_topic_name]
+                        pass
         else:
             self._update_val(topic_name, message)
 
