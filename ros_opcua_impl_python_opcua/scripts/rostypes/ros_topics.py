@@ -57,7 +57,7 @@ class OpcUaROSTopic:
 
     def _recursive_create_items(self, parent, topic_name, type_name, message, top_level=False):
         rospy.logdebug('Creating item for {} | {}'.format(topic_name, type_name))
-        topic_text = topic_name.split('/')[-1]
+        topic_text = node_name = topic_name.split('/')[-1]
         if '[' in topic_text:
             topic_text = topic_text[topic_text.index('['):]
 
@@ -72,7 +72,7 @@ class OpcUaROSTopic:
             
             # Create node and add a type property
             new_node = parent.add_object(ua.NodeId(topic_name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
-                                         ua.QualifiedName(topic_name.split('/')[-1], parent.nodeid.NamespaceIndex))
+                                         ua.QualifiedName(node_name, parent.nodeid.NamespaceIndex))
             new_node.add_property(ua.NodeId(topic_name + ".Type", self.idx),
                                   ua.QualifiedName("Type", parent.nodeid.NamespaceIndex), type_name)
 
@@ -116,7 +116,7 @@ class OpcUaROSTopic:
                 rospy.logdebug('Creating typed array node')
                 # rospy.logdebug('Creating item for unbounded arrays')
                 new_node = parent.add_object(ua.NodeId(topic_name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
-                                        ua.QualifiedName(topic_name, parent.nodeid.NamespaceIndex))
+                                        ua.QualifiedName(node_name, parent.nodeid.NamespaceIndex))
                 new_node.add_property(ua.NodeId(topic_name + ".Type", self.idx),
                                 ua.QualifiedName("Type", parent.nodeid.NamespaceIndex), type_name)
                 self._nodes[topic_name] = new_node
@@ -136,7 +136,7 @@ class OpcUaROSTopic:
         # rospy.loginfo('--- message cb | {}'.format(self.name))
         # Only update if type/child construction has finished
         if self.constructed:
-            # self.update_value(self.name, message)
+            self.update_value(self.name, message)
             sys.stdout.flush()
 
     # Method to force request a value update towards ROS
@@ -169,7 +169,6 @@ class OpcUaROSTopic:
             return
 
         # Structs
-        rospy.loginfo('array? {}'.format(type(message) in (list, tuple)))
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
             self._update_struct(topic_name, message)
 
@@ -184,7 +183,8 @@ class OpcUaROSTopic:
                 childCount = len(filter(lambda c: c.get_display_name().Text != 'Type', self._nodes[topic_name].get_children()))
                 if len(message) < childCount:
                     for i in range(len(message), childCount):
-                        rospy.loginfo('Warning, deleting stuff!')
+                        # FIXME broken with new array support feature
+                        # rospy.loginfo('Warning, deleting stuff!')
                         item_topic_name = topic_name + '[%d]' % i
                         self.recursive_delete_items(self._nodes[item_topic_name])
                         del self._nodes[item_topic_name]
@@ -232,7 +232,7 @@ class OpcUaROSTopic:
                     
                 # TODO remove items which are missing (e.g. when a list moves from len 6 to len 4)
         else:
-            rospy.loginfo('[{}] Message skipped (list), len: {} | {}'.format(topic_name, len(message), message))
+            rospy.logdebug('[{}] Message skipped (list), len: {} | {}'.format(topic_name, len(message), message))
             # rospy.loginfo('Message: {}'.format(str(message)))
 
     def _update_val(self, topic_name, message):
@@ -242,7 +242,7 @@ class OpcUaROSTopic:
             rospy.logdebug(obj)
             obj.set_value(repr(message))
         else:
-            rospy.logwarn('Message skipped (repr) {}, len: {}'.format(topic_name, len(message)))
+            rospy.logwarn('Message skipped (repr), topic is unknown: {}, len: {}'.format(topic_name, len(message)))
 
     def recursive_delete_items(self, item):
         self._publisher.unregister()
@@ -425,9 +425,9 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
             assert(topic is not None)
             topicsdict[topic_name] = topic
         # if the topic was already seen, check if the topic has become ?? obsolete ??
-        elif numberofsubscribers(topic_name, topicsdict) <= 1 and "rosout" not in topic_name:
-            topicsdict[topic_name].recursive_delete_items(server.server.get_node(ua.NodeId(topic_name, idx_topics)))
-            del topicsdict[topic_name]
+        # elif numberofsubscribers(topic_name, topicsdict) <= 1 and "rosout" not in topic_name:
+        #     topicsdict[topic_name].recursive_delete_items(server.server.get_node(ua.NodeId(topic_name, idx_topics)))
+        #     del topicsdict[topic_name]
 
     # ros_topics = rospy.get_published_topics(namespace_ros)
     # All current topics which are also present at ROS, we have created all new topics, so only need to remove old topics.
