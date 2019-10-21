@@ -344,34 +344,34 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
     # topicsdict.clear()
     topicsdict.update(newTopics)
 
-    ros_actions.refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions)
+    # ros_actions.refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions)
 
     if needCleanup:
         rospy.loginfo('Cleaning up rosnode')
         ros_server.own_rosnode_cleanup()
 
 
-def get_feedback_type(action_name):
-    try:
-        type, name, fn = rostopic.get_topic_type("{}/feedback".format(action_name))
-        return type
-    except rospy.ROSException as e:
-        try:
-            type, name, fn = rostopic.get_topic_type("{action_name}/Feedback", e)
-            return type
-        except rospy.ROSException as e2:
-            rospy.logerr("Couldnt find feedback type for action {}".format(action_name), e2)
-            return None
+# def get_feedback_type(action_name):
+#     try:
+#         type, name, fn = rostopic.get_topic_type("{}/feedback".format(action_name))
+#         return type
+#     except rospy.ROSException as e:
+#         try:
+#             type, name, fn = rostopic.get_topic_type("{action_name}/Feedback", e)
+#             return type
+#         except rospy.ROSException as e2:
+#             rospy.logerr("Couldnt find feedback type for action {}".format(action_name), e2)
+#             return None
 
 
-def get_goal_type(action_name):
-    try:
-        type, name, fn = rostopic.get_topic_type("{}/goal".format(action_name))
-        return type
-    except rospy.ROSException as e:
-        try:
-            type, name, fn = rostopic.get_topic_type("{}/Goal".format(action_name), e)
-            return type
-        except rospy.ROSException as e2:
-            rospy.logerr("Couldnt find feedback type for action {}".format(action_name), e2)
-            return None
+# def get_goal_type(action_name):
+#     try:
+#         type, name, fn = rostopic.get_topic_type("{}/goal".format(action_name))
+#         return type
+#     except rospy.ROSException as e:
+#         try:
+#             type, name, fn = rostopic.get_topic_type("{}/Goal".format(action_name), e)
+#             return type
+#         except rospy.ROSException as e2:
+#             rospy.logerr("Couldnt find feedback type for action {}".format(action_name), e2)
+#             return None
