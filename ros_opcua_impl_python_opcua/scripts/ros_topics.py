@@ -292,33 +292,11 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
                 
                 correct_name = ros_actions.get_correct_name(topic_name)
                 rospy.logdebug('Skipping generation of action {}'.format(correct_name))
-                continue # Disabled actions for debugging purposes
-                
-                # if correct_name not in actionsdict:
-                #     try:
-                #         goal_type = get_goal_type(correct_name)
-                #         if goal_type is not None: # do not register if the topic does not have a goal
-                #             rospy.loginfo("Creating Action with name: {}".format(correct_name))
-                            
-                #             action = ros_actions.OpcUaROSAction(server,
-                #                     actions,
-                #                     idx_actions,
-                #                     correct_name,
-                #                     goal_type,
-                #                     get_feedback_type(correct_name))
-                #             assert(action is not None)
-                #             actionsdict[correct_name] = action
-                #     # FIXME BadNodeIdExists is a bug and should be fixed, this prevents the entire server from crashing, see ros_actions.py
-                #     except (ValueError, TypeError, AttributeError, opcua.ua.uaerrors._auto.BadNodeIdExists) as e:
-                #         print(e)
-                #         traceback.print_exc()
-                #         rospy.logerr("Error while creating Action Objects for Action " + topic_name)
-
-            else:
-                # FIXME crashes when message type is not known
-                topic = OpcUaROSTopic(server, topics, idx_topics, topic_name, topic_type)
-                assert(topic is not None)
-                topicsdict[topic_name] = topic
+            
+            # FIXME crashes when message type is not known
+            topic = OpcUaROSTopic(server, topics, idx_topics, topic_name, topic_type)
+            assert(topic is not None)
+            topicsdict[topic_name] = topic
         # if the topic was already seen, check if the topic has become ?? obsolete ??
         elif numberofsubscribers(topic_name, topicsdict) <= 1 and "rosout" not in topic_name:
             topicsdict[topic_name].recursive_delete_items(server.server.get_node(ua.NodeId(topic_name, idx_topics)))
@@ -344,34 +322,6 @@ def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, i
     # topicsdict.clear()
     topicsdict.update(newTopics)
 
-    # ros_actions.refresh_dict(namespace_ros, actionsdict, topicsdict, server, idx_actions)
-
     if needCleanup:
         rospy.loginfo('Cleaning up rosnode')
         ros_server.own_rosnode_cleanup()
-
-
-# def get_feedback_type(action_name):
-#     try:
-#         type, name, fn = rostopic.get_topic_type("{}/feedback".format(action_name))
-#         return type
-#     except rospy.ROSException as e:
-#         try:
-#             type, name, fn = rostopic.get_topic_type("{action_name}/Feedback", e)
-#             return type
-#         except rospy.ROSException as e2:
-#             rospy.logerr("Couldnt find feedback type for action {}".format(action_name), e2)
-#             return None
-
-
-# def get_goal_type(action_name):
-#     try:
-#         type, name, fn = rostopic.get_topic_type("{}/goal".format(action_name))
-#         return type
-#     except rospy.ROSException as e:
-#         try:
-#             type, name, fn = rostopic.get_topic_type("{}/Goal".format(action_name), e)
-#             return type
-#         except rospy.ROSException as e2:
-#             rospy.logerr("Couldnt find feedback type for action {}".format(action_name), e2)
-#             return None
