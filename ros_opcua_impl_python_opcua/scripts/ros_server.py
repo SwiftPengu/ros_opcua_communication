@@ -62,7 +62,7 @@ class ROSServer:
                 self.own_rosnode_cleanup()
                 # Don't clog cpu
                 # quit()
-                time.sleep(2)
+                time.sleep(5)
         finally:
             # Always attempt to clean up
             self.cleanup()
@@ -74,7 +74,7 @@ class ROSServer:
     def find_service_node_with_same_name(self, name, idx):
         rospy.logdebug("Reached ServiceCheck for name " + name)
         for service in self.servicesDict:
-            rospy.logdebug("Found name: " + str(self.servicesDict[service].parent.nodeid.Identifier))
+            # rospy.logdebug("Found name: " + str(self.servicesDict[service].parent.nodeid.Identifier))
             if self.servicesDict[service].parent.nodeid.Identifier == name:
                 rospy.logdebug("Found match for name: " + name)
                 return self.servicesDict[service].parent
@@ -83,7 +83,7 @@ class ROSServer:
     def find_topics_node_with_same_name(self, name, idx):
         rospy.logdebug("Reached TopicCheck for name " + name)
         for topic in self.topicsDict:
-            rospy.logdebug("Found name: " + str(self.topicsDict[topic].parent.nodeid.Identifier))
+            # rospy.logdebug("Found name: " + str(self.topicsDict[topic].parent.nodeid.Identifier))
             if self.topicsDict[topic].parent.nodeid.Identifier == name:
                 rospy.logdebug("Found match for name: " + name)
                 return self.topicsDict[topic].parent
@@ -92,7 +92,7 @@ class ROSServer:
     def find_action_node_with_same_name(self, name, idx):
         rospy.logdebug("Reached ActionCheck for name " + name)
         for topic in self.actionsDict:
-            rospy.logdebug("Found name: " + str(self.actionsDict[topic].parent.nodeid.Identifier))
+            # rospy.logdebug("Found name: " + str(self.actionsDict[topic].parent.nodeid.Identifier))
             if self.actionsDict[topic].parent.nodeid.Identifier == name:
                 rospy.logdebug("Found match for name: " + name)
                 return self.actionsDict[topic].parent

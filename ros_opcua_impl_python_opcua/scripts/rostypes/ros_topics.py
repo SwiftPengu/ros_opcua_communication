@@ -26,6 +26,7 @@ import sys
 class OpcUaROSTopic:
     def __init__(self, server, parent, idx, topic_name, topic_type):
         self.server = server
+        self.constructed = False
         self.idx = idx
         self.parent = self.recursive_create_objects(topic_name, parent)
         self.type_name = topic_type
@@ -34,6 +35,7 @@ class OpcUaROSTopic:
 
         self.message_class = None
         try:
+            rospy.logdebug("Creating ROS Topic with name: {} and type: {}...".format(self.name, self.type_name))
             self.message_class = roslib.message.get_message_class(topic_type)
             self.message_instance = self.message_class()
 
@@ -41,15 +43,20 @@ class OpcUaROSTopic:
 
             self._subscriber = rospy.Subscriber(self.name, self.message_class, self.message_callback)
             self._publisher = rospy.Publisher(self.name, self.message_class, queue_size=1)
-            rospy.loginfo("Created ROS Topic with name: " + str(self.name))
+            rospy.loginfo("Created ROS Topic with name: {} and type: {}!".format(self.name, self.type_name))
         except (rospy.ROSException, TypeError) as e:
             self.message_class = None
             rospy.logfatal("Couldn't find message class for type " + topic_type)
 
             raise e
+        self.constructed = True
+        # if self.name == '/rosout':
+            # quit()
+            # pass
 
 
     def _recursive_create_items(self, parent, topic_name, type_name, message, top_level=False):
+        rospy.logdebug('Creating item for {} | {}'.format(topic_name, type_name))
         topic_text = topic_name.split('/')[-1]
         if '[' in topic_text:
             topic_text = topic_text[topic_text.index('['):]
@@ -60,9 +67,12 @@ class OpcUaROSTopic:
 
         # This here are 'complex datatypes'
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
-            complex_type = True
+            rospy.logdebug('Creating struct {}'.format(topic_name))
+            # rospy.logdebug('{} / {}'.format(message.__slots__, message._slot_types))
+            
+            # Create node and add a type property
             new_node = parent.add_object(ua.NodeId(topic_name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
-                                         ua.QualifiedName(topic_name, parent.nodeid.NamespaceIndex))
+                                         ua.QualifiedName(topic_name.split('/')[-1], parent.nodeid.NamespaceIndex))
             new_node.add_property(ua.NodeId(topic_name + ".Type", self.idx),
                                   ua.QualifiedName("Type", parent.nodeid.NamespaceIndex), type_name)
 
@@ -71,37 +81,52 @@ class OpcUaROSTopic:
                 new_node.add_method(ua.NodeId(topic_name + ".Update", parent.nodeid.NamespaceIndex),
                                     ua.QualifiedName("Update", parent.nodeid.NamespaceIndex),
                                     self.opcua_update_callback, [], [])
+                
+            # Process child nodes
             for slot_name, type_name_child in zip(message.__slots__, message._slot_types):
-                self._recursive_create_items(new_node, topic_name + '/' + slot_name, type_name_child,
-                                             getattr(message, slot_name))
+                rospy.logdebug('Creating child for {}, slot_name: {}, slot_type: {}'.format(topic_name, slot_name, type_name_child))
+                self._recursive_create_items(
+                        parent=new_node,
+                        topic_name='{}/{}'.format(topic_name, slot_name),
+                        type_name=type_name_child,
+                        message=getattr(message, slot_name)
+                    )
+                
+            # Store node in the index
             self._nodes[topic_name] = new_node
 
-        else:
+        elif type(message) in (list, tuple):
+            rospy.logdebug('Creating array item for {} ({})'.format(topic_name, type_name))
             # These are arrays
             base_type_str, array_size = _extract_array_info(type_name)
             try:
                 base_instance = roslib.message.get_message_class(base_type_str)()
             except (ValueError, TypeError):
                 base_instance = None
+                
+            rospy.logdebug('Base array type is: {}[{}]'.format(base_type_str, array_size))
+
 
             if array_size is not None and hasattr(base_instance, '__slots__'):
-                # Create nodes for unbounded arrays
-                if array_size == 0:
-                    new_node = parent.add_object(ua.NodeId(topic_name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
-                                         ua.QualifiedName(topic_name, parent.nodeid.NamespaceIndex))
-                    new_node.add_property(ua.NodeId(topic_name + ".Type", self.idx),
-                                  ua.QualifiedName("Type", parent.nodeid.NamespaceIndex), type_name)
-                    self._nodes[topic_name] = new_node
-                else:
-                    for index in range(array_size):
-                        self._recursive_create_items(parent, topic_name + '[%d]' % index, base_type_str, base_instance)
+                # Create nodes for bounded arrays
+                # TODO check if parent item is required
+                for index in range(array_size):
+                    self._recursive_create_items(parent, topic_name + '[%d]' % index, base_type_str, base_instance)
             else:
-                new_node = _create_node_with_type(parent, self.idx, topic_name, topic_text, type_name, array_size)
-                # Only add nodes if creation was successful
-                if new_node is not None:
-                    self._nodes[topic_name] = new_node
-                else:
-                    rospy.logwarn('Error creating node with type topic: {}, type: {}, skipping creation'.format(topic_name, type_name))
+                rospy.logdebug('Creating typed array node')
+                # rospy.logdebug('Creating item for unbounded arrays')
+                new_node = parent.add_object(ua.NodeId(topic_name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
+                                        ua.QualifiedName(topic_name, parent.nodeid.NamespaceIndex))
+                new_node.add_property(ua.NodeId(topic_name + ".Type", self.idx),
+                                ua.QualifiedName("Type", parent.nodeid.NamespaceIndex), type_name)
+                self._nodes[topic_name] = new_node
+        else:
+            rospy.logdebug('Creating variable')
+            new_node = _create_node_with_type(parent, topic_name, topic_text, type_name)
+            if new_node is not None:
+                self._nodes[topic_name] = new_node
+            else:
+                rospy.logwarn('Error creating node with type topic: {}, type: {}, skipping creation'.format(topic_name, type_name))
 
         if topic_name in self._nodes and self._nodes[topic_name].get_node_class() == ua.NodeClass.Variable:
             self._nodes[topic_name].set_writable(True)
@@ -109,8 +134,10 @@ class OpcUaROSTopic:
 
     def message_callback(self, message):
         # rospy.loginfo('--- message cb | {}'.format(self.name))
-        self.update_value(self.name, message)
-        sys.stdout.flush()
+        # Only update if type/child construction has finished
+        if self.constructed:
+            # self.update_value(self.name, message)
+            sys.stdout.flush()
 
     # Method to force request a value update towards ROS
     @uamethod
@@ -133,6 +160,8 @@ class OpcUaROSTopic:
 
     # Method which publishes ROS topic updates to OPC-UA
     def update_value(self, topic_name, message):
+        rospy.logdebug('Updating: {}'.format(topic_name))
+        
         # skip dynamic reconfigure
         if 'parameter_descriptions' in topic_name:
             return
@@ -140,6 +169,7 @@ class OpcUaROSTopic:
             return
 
         # Structs
+        rospy.loginfo('array? {}'.format(type(message) in (list, tuple)))
         if hasattr(message, '__slots__') and hasattr(message, '_slot_types'):
             self._update_struct(topic_name, message)
 
@@ -162,50 +192,55 @@ class OpcUaROSTopic:
             self._update_val(topic_name, message)
 
     def _update_struct(self, topic_name, message):
+        rospy.logdebug('Update struct')
         # rospy.loginfo('updating slots of topic {}'.format(topic_name))
         for slot_name in message.__slots__:
             # rospy.loginfo('updating slot of topic {}: {}'.format(topic_name, slot_name))
             self.update_value('{}/{}'.format(topic_name,slot_name), getattr(message, slot_name))
 
     def _update_list(self, topic_name, message):
+        rospy.logdebug('Update list')
         if (len(message) > 0):
             # rospy.loginfo('[{}] Processing array, len: {}'.format(topic_name, len(message)))
             # enumerate(message)
             for index, slot in enumerate(message):
+                # Check if array element exists, and update that
                 if '{}[{}]'.format(topic_name, index) in self._nodes:
                     self.update_value(topic_name + '[%d]' % index, slot)
-                else:
-                    # rospy.loginfo('[{}[{}]] Topic not in self.nodes'.format(topic_name, index))
-                    if topic_name in self._nodes:
-                        # Get the type property
-                        typeProp = None
-                        try:
-                            typeProp = next(itertools.ifilter(lambda p: p.get_display_name().Text == 'Type', self._nodes[topic_name].get_properties()))
-                        except StopIteration:
-                            rospy.logerr('Bug? Node has no type! Topic: {}'.format(topic_name))
-                            rospy.loginfo(self._nodes[topic_name])
-                            rospy.loginfo(self._nodes[topic_name].get_properties())
-                            return
+                    continue
+                
+                # Check if the topic name is known (this is expected, the else case is probably a bug)
+                if topic_name in self._nodes:
+                    # Get the type property
+                    typeProp = None
+                    try:
+                        typeProp = next(itertools.ifilter(lambda p: p.get_display_name().Text == 'Type', self._nodes[topic_name].get_properties()))
+                    except StopIteration:
+                        rospy.logerr('Bug? Node has no type! Topic: {}, Message: {}'.format(topic_name, message))
+                        rospy.loginfo(self._nodes[topic_name])
+                        return
 
-                        # Remove array marks from the type to get the 'base_type'
-                        type_str = typeProp.get_value()
-                        assert(type_str[-2:] == '[]')
-                        base_type_str = typeProp.get_value()[:-2]
-                        self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index,
-                                                    base_type_str,
-                                                    slot, None)
-                    else:
-                        # FIXME unbounded arrays have no nodes, so new ones are needed
-                        rospy.logwarn('Node not handled: {}'.format(topic_name))
+                    # Remove array marks from the type to get the 'base_type'
+                    type_str = typeProp.get_value()
+                    assert(type_str[-2:] == '[]')
+                    base_type_str = typeProp.get_value()[:-2]
+                    self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index,
+                                                base_type_str,
+                                                slot, None)
+                else:
+                    rospy.logwarn('Node not handled, update for non-existing topic? ({})'.format(topic_name))
+                    
                 # TODO remove items which are missing (e.g. when a list moves from len 6 to len 4)
         else:
             rospy.loginfo('[{}] Message skipped (list), len: {} | {}'.format(topic_name, len(message), message))
             # rospy.loginfo('Message: {}'.format(str(message)))
 
     def _update_val(self, topic_name, message):
-        # rospy.loginfo('Message set to repr {}, repr: {}'.format(topic_name, repr(message)))
+        rospy.logdebug('Message set to repr {}, repr: {}'.format(topic_name, repr(message)))
         if topic_name in self._nodes and self._nodes[topic_name] is not None:
-            self._nodes[topic_name].set_value(repr(message))
+            obj = self._nodes[topic_name]
+            rospy.logdebug(obj)
+            obj.set_value(repr(message))
         else:
             rospy.logwarn('Message skipped (repr) {}, len: {}'.format(topic_name, len(message)))
 
@@ -289,16 +324,10 @@ def _extract_array_info(type_str):
         array_size_str = array_size_str[:-1]
         if len(array_size_str) > 0:
             array_size = int(array_size_str)
-        else:
-            array_size = 0
 
     return type_str, array_size
 
-
-def _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array_size):
-    if '[' in type_name:
-        type_name = type_name[:type_name.index('[')]
-
+def _get_ua_variant(type_name, topic_name):
     if type_name == 'bool':
         dv = ua.Variant(False, ua.VariantType.Boolean)
     elif type_name == 'byte':
@@ -328,15 +357,23 @@ def _create_node_with_type(parent, idx, topic_name, topic_text, type_name, array
     elif type_name == 'string':
         dv = ua.Variant('', ua.VariantType.String)
     else:
+        raise TypeError('Unknown type {} for topic {}'.format(type_name, topic_name))
+    
+    return dv
+
+def _create_node_with_type(parent, topic_name, topic_text, type_name):
+    # Strip off array designations
+    if '[' in type_name:
+        type_name = type_name[:type_name.index('[')]
+        
+    try:
+        variant = _get_ua_variant(type_name, topic_name)
+    except TypeError:
         rospy.logwarn("can't create node with type {} for topic {}".format(type_name, topic_name))
         return None
-
-    if array_size is not None and array_size > 0:
-        value = []
-        for i in range(array_size):
-            value.append(i)
+            
     return parent.add_variable(ua.NodeId(topic_name, parent.nodeid.NamespaceIndex),
-                               ua.QualifiedName(topic_text, parent.nodeid.NamespaceIndex), dv.Value)
+                               ua.QualifiedName(topic_text, parent.nodeid.NamespaceIndex), variant.Value)
 
 
 # Used to delete obsolete topics
