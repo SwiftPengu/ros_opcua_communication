@@ -407,9 +407,11 @@ def get_goal_type(action_name):
             rospy.logerr("Couldnt find feedback type for action {}".format(action_name), e2)
             return None
 
-def refresh_topics_and_actions(namespace_ros, server, topicsdict, actionsdict, idx_topics, idx_actions, topics,
+def refresh_topics_and_actions(namespace_ros, topicsFilter, server, topicsdict, actionsdict, idx_topics, idx_actions, topics,
                                actions):
     ros_topics = rospy.get_published_topics(namespace_ros)
+    # Apply topics filter
+    ros_topics = [(topic_name, topic_type) for topic_name, topic_type in ros_topics  if topicsFilter(topic_name)]
     for topic_name, topic_type in ros_topics:
         # Create new topics if they are not in the current dict
         if topic_name not in topicsdict or topicsdict[topic_name] is None:

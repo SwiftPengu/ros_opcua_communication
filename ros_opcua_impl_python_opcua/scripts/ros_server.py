@@ -8,12 +8,15 @@ import rospy
 import opcua
 
 from rostypes import ros_services, ros_topics
+from tools import filtering
 import os
 
 HOST = os.environ.get('HOST', '0.0.0.0')
 PORT = os.environ.get('PORT', 21554)
 NS = os.environ.get('NS', '/') # alternative for using the params.yaml file
 LOGLEVEL = os.environ.get('ROS_LOGLEVEL', rospy.INFO)
+
+topicsFilter = filtering.parseFilters(os.environ.get('FILTERS', None))
 
 
 class ROSServer:
@@ -58,7 +61,7 @@ class ROSServer:
                 # ros_topics starts a lot of publisher/subscribers, might slow everything down quite a bit.
                 rospy.logdebug('Checking for new services, topics and actions')
                 ros_services.refresh_services(self.namespace_ros, self, self.servicesDict, self.idx_services, self.services_object)
-                ros_topics.refresh_topics_and_actions(self.namespace_ros, self, self.topicsDict, self.actionsDict, self.idx_topics, self.idx_actions, self.topics_object, self.actions_object)
+                ros_topics.refresh_topics_and_actions(self.namespace_ros, topicsFilter, self, self.topicsDict, self.actionsDict, self.idx_topics, self.idx_actions, self.topics_object, self.actions_object)
                 self.own_rosnode_cleanup()
                 # Don't clog cpu
                 # quit()
