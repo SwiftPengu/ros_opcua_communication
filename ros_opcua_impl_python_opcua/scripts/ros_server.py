@@ -65,7 +65,7 @@ class ROSServer:
                 self.own_rosnode_cleanup()
                 # Don't clog cpu
                 # quit()
-                time.sleep(5)
+                time.sleep(0.5)
         finally:
             # Always attempt to clean up
             self.cleanup()

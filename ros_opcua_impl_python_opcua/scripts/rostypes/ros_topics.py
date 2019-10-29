@@ -202,32 +202,34 @@ class OpcUaROSTopic:
         if (len(message) > 0):
             # rospy.loginfo('[{}] Processing array, len: {}'.format(topic_name, len(message)))
             # enumerate(message)
-            for index, slot in enumerate(message):
-                # Check if array element exists, and update that
-                if '{}[{}]'.format(topic_name, index) in self._nodes:
-                    self.update_value(topic_name + '[%d]' % index, slot)
-                    continue
-                
+            if topic_name in self._nodes:
                 # Check if the topic name is known (this is expected, the else case is probably a bug)
-                if topic_name in self._nodes:
-                    # Get the type property
-                    typeProp = None
-                    try:
-                        typeProp = next(itertools.ifilter(lambda p: p.get_display_name().Text == 'Type', self._nodes[topic_name].get_properties()))
-                    except StopIteration:
-                        rospy.logerr('Bug? Node has no type! Topic: {}, Message: {}'.format(topic_name, message))
-                        rospy.loginfo(self._nodes[topic_name])
-                        return
+                # Get the type property
+                typeProp = None
+                try:
+                    typeProp = next(itertools.ifilter(lambda p: p.get_display_name().Text == 'Type', self._nodes[topic_name].get_properties()))
+                except StopIteration:
+                    rospy.logerr('Bug? Node has no type! Topic: {}, Message: {}'.format(topic_name, message))
+                    rospy.loginfo(self._nodes[topic_name])
+                    return
 
-                    # Remove array marks from the type to get the 'base_type'
-                    type_str = typeProp.get_value()
-                    assert(type_str[-2:] == '[]')
-                    base_type_str = typeProp.get_value()[:-2]
-                    self._recursive_create_items(self._nodes[topic_name], topic_name + '[%d]' % index,
-                                                base_type_str,
+                # Remove array marks from the type to get the 'base_type'
+                type_str = typeProp.get_value()
+                assert(type_str[-2:] == '[]')
+                base_type_str = typeProp.get_value()[:-2]
+
+                # Iterate over all array elements
+                for index, slot in enumerate(message):
+                    indexNodeName = '{}[{}]'.format(topic_name, index)
+                    # Check if array element exists, and update that
+                    if indexNodeName in self._nodes:
+                        self.update_value(indexNodeName, slot)
+                    else:
+                        self._recursive_create_items(self._nodes[topic_name], indexNodeName,
+                                                    base_type_str,
                                                 slot, None)
-                else:
-                    rospy.logwarn('Node not handled, update for non-existing topic? ({})'.format(topic_name))
+            else:
+                rospy.logwarn('Node not handled, update for non-existing topic? ({})'.format(topic_name))
                     
                 # TODO remove items which are missing (e.g. when a list moves from len 6 to len 4)
         else:
