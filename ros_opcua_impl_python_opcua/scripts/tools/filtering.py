@@ -8,7 +8,7 @@ ACCEPT_ALL = lambda topicName: True
 
         Filters are defined as a semicolon-separated list of ROS topic tree parts
         Topic parts can be prepended by '+' (default) or '-' to specify inclusion or exclusion respectively.
-        Priority is assigned by the definition order.
+        Additions are processed first, then removals will happen on that set.
 
         
         EBNF:
