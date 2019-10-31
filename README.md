@@ -5,6 +5,7 @@ This fork adds the following:
 * Support for ros-melodic
 * Various bugfixes, tested on the Franka Panda robot
 * Some refactoring to make code easier to read an debug
+* Implement more complex filtering of topics to subscribe to.
 
 # Docker image
 ## General
