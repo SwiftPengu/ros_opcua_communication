@@ -71,16 +71,24 @@ class OpcUaROSTopic:
             # rospy.logdebug('{} / {}'.format(message.__slots__, message._slot_types))
             
             # Create node and add a type property
-            new_node = parent.add_object(ua.NodeId(topic_name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String),
-                                         ua.QualifiedName(node_name, parent.nodeid.NamespaceIndex))
-            new_node.add_property(ua.NodeId(topic_name + ".Type", self.idx),
-                                  ua.QualifiedName("Type", parent.nodeid.NamespaceIndex), type_name)
+            newNodeId = ua.NodeId(topic_name, parent.nodeid.NamespaceIndex, ua.NodeIdType.String)
+            
+            existingNodes = filter(lambda child: child.nodeid.Identifier == newNodeId.Identifier, parent.get_children())
+            new_node = None
+            if len(existingNodes) == 0:
+                # map(lambda child: child.get_node, parent.get_children())
+                new_node = parent.add_object(newNodeId, ua.QualifiedName(node_name, parent.nodeid.NamespaceIndex))
+                new_node.add_property(ua.NodeId(topic_name + ".Type", self.idx),
+                                    ua.QualifiedName("Type", parent.nodeid.NamespaceIndex), type_name)
+        
 
-            # Add an 'update' method, which ??? (publish to ROS) ?
-            if top_level:
-                new_node.add_method(ua.NodeId(topic_name + ".Update", parent.nodeid.NamespaceIndex),
-                                    ua.QualifiedName("Update", parent.nodeid.NamespaceIndex),
-                                    self.opcua_update_callback, [], [])
+                # Add an 'update' method, which ??? (publish to ROS) ?
+                if top_level:
+                    new_node.add_method(ua.NodeId(topic_name + ".Update", parent.nodeid.NamespaceIndex),
+                                        ua.QualifiedName("Update", parent.nodeid.NamespaceIndex),
+                                        self.opcua_update_callback, [], [])
+            else:
+                new_node = existingNodes[0]
                 
             # Process child nodes
             for slot_name, type_name_child in zip(message.__slots__, message._slot_types):
@@ -225,9 +233,7 @@ class OpcUaROSTopic:
                     if indexNodeName in self._nodes:
                         self.update_value(indexNodeName, slot)
                     else:
-                        self._recursive_create_items(self._nodes[topic_name], indexNodeName,
-                                                    base_type_str,
-                                                slot, None)
+                        self._recursive_create_items(self._nodes[topic_name], indexNodeName, base_type_str, slot, None)
             else:
                 rospy.logwarn('Node not handled, update for non-existing topic? ({})'.format(topic_name))
                     
@@ -372,9 +378,17 @@ def _create_node_with_type(parent, topic_name, topic_text, type_name):
     except TypeError:
         rospy.logwarn("can't create node with type {} for topic {}".format(type_name, topic_name))
         return None
-            
-    return parent.add_variable(ua.NodeId(topic_name, parent.nodeid.NamespaceIndex),
-                               ua.QualifiedName(topic_text, parent.nodeid.NamespaceIndex), variant.Value)
+
+    newNodeId = ua.NodeId(topic_name, parent.nodeid.NamespaceIndex)
+    existingVariables = filter(lambda variable: variable.nodeid.Identifier == newNodeId.Identifier, parent.get_variables())
+    newVariable = None
+    if len(existingVariables) == 0:
+        newVariable = parent.add_variable(newNodeId,
+                                ua.QualifiedName(topic_text, parent.nodeid.NamespaceIndex), variant.Value)
+    else:
+        newVariable = existingVariables[0]
+    return newVariable
+    
 
 
 # Used to delete obsolete topics
